@@ -2,78 +2,88 @@ package main
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
 	"log"
 	"net/http"
 	"os"
-	"strconv"
 
-	"github.com/bradleyfalzon/ghinstallation/v2"
-	"github.com/google/go-github/v67/github"
+	"github.com/hasura/go-graphql-client"
 	"github.com/joho/godotenv"
 )
 
+// GitHub APIのエンドポイント
+const githubGraphQLEndpoint = "https://api.github.com/graphql"
+
+// 特定のプロジェクトのIssueを取得するためのクエリ用構造体
+type ProjectIssuesQuery struct {
+	User struct {
+		ProjectV2 struct {
+			Items struct {
+				Nodes []struct {
+					Content struct {
+						Issue struct {
+							Title  string
+							Number int
+						} `graphql:"... on Issue"`
+					}
+					Kijitu struct {
+						ProjectV2ItemFieldDateValue struct {
+							Date string
+						} `graphql:"... on ProjectV2ItemFieldDateValue"`
+					} `graphql:"fieldValueByName(name: \"kijitu\")"`
+				}
+			} `graphql:"items(first: 100)"`
+		} `graphql:"projectV2(number: $projectNumber)"`
+	} `graphql:"user(login: $user)"`
+}
+
 func main() {
-	// .env ファイルを読み込む
 	err := godotenv.Load()
 	if err != nil {
-		log.Fatalf("Error loading .env file")
+		log.Fatalf("error loading .env file")
+	}
+	// GitHubのPersonal Access Token
+	githubToken := os.Getenv("GITHUB_TOKEN_CLASSIC")
+
+	// HTTPクライアントを作成し、Authorizationヘッダーを設定
+	httpClient := &http.Client{
+		Transport: &transport{
+			token: githubToken,
+		},
 	}
 
-	// 環境変数から統合 ID とインストール ID を取得
-	appID, err := strconv.ParseInt(os.Getenv("GITHUB_APP_ID"), 10, 64)
+	// GraphQLクライアントを初期化
+	client := graphql.NewClient(githubGraphQLEndpoint, httpClient)
+
+	// クエリ結果を格納する変数
+	var query ProjectIssuesQuery
+
+	// クエリ変数を設定
+	variables := map[string]interface{}{
+		"projectNumber": graphql.Int(3),             // プロジェクト番号を指定
+		"user":          graphql.String("mathsuky"), // ユーザー名を指定
+	}
+
+	// クエリ実行
+	err = client.Query(context.Background(), &query, variables)
 	if err != nil {
-		log.Fatalf("Error parsing GITHUB_APP_ID: %v", err)
+		log.Fatalf("failed to execute query: %v", err)
 	}
 
-	installationID, err := strconv.ParseInt(os.Getenv("GITHUB_INSTALLATION_ID"), 10, 64)
-	if err != nil {
-		log.Fatalf("Error parsing GITHUB_INSTALLATION_ID: %v", err)
+	// 結果を出力
+	fmt.Println("Issues in the Project:")
+	for _, item := range query.User.ProjectV2.Items.Nodes {
+		fmt.Printf("Issue Number: %d\nTitle: %s\nKijitu Date: %s\n\n", item.Content.Issue.Number, item.Content.Issue.Title, item.Kijitu.ProjectV2ItemFieldDateValue.Date)
 	}
+}
 
-	privateKeyPath := os.Getenv("GITHUB_PRIVATE_KEY_PATH")
+// HTTPクライアント用のトランスポート構造体
+type transport struct {
+	token string
+}
 
-	// Wrap the shared transport for use with the integration ID and installation ID.
-	itr, err := ghinstallation.NewKeyFromFile(http.DefaultTransport, appID, installationID, privateKeyPath)
-	if err != nil {
-		log.Fatalf("Error creating installation transport: %v", err)
-	}
-
-	// Use installation transport with client.
-	client := github.NewClient(&http.Client{Transport: itr})
-
-	// 特定のリポジトリのイシューをリストする
-	owner := "mathsuky"
-	repo := "BOT_remind"
-	opts := &github.IssueListByRepoOptions{
-		State: "open", // open/closed/all
-	}
-
-	issues, _, err := client.Issues.ListByRepo(context.Background(), owner, repo, opts)
-	if err != nil {
-		log.Fatalf("Error listing issues for repository: %v", err)
-	}
-
-	// イシューを表示する
-	for _, issue := range issues {
-		fmt.Printf("Issue #%d: %s\n", issue.GetNumber(), issue.GetTitle())
-		fmt.Printf("comments: %d\n", issue.GetComments())
-
-		// イシューのコメントをリストする
-		comments, _, err := client.Issues.ListComments(context.Background(), owner, repo, issue.GetNumber(), nil)
-		if err != nil {
-			log.Fatalf("Error listing comments for issue #%d: %v", issue.GetNumber(), err)
-		}
-
-		// コメントを表示する
-		for _, comment := range comments {
-			commentJSON, err := json.MarshalIndent(comment, "", "  ")
-			if err != nil {
-				log.Fatalf("Error marshalling comment to JSON: %v", err)
-			}
-			fmt.Println(string(commentJSON))
-		}
-	}
-	//
+func (t *transport) RoundTrip(req *http.Request) (*http.Response, error) {
+	req.Header.Set("Authorization", "Bearer "+t.token)
+	req.Header.Set("Content-Type", "application/json")
+	return http.DefaultTransport.RoundTrip(req)
 }
