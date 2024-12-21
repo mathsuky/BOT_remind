@@ -2,7 +2,6 @@ package main
 
 import (
 	"context"
-	"fmt"
 	"log"
 	"net/http"
 	"os"
@@ -14,44 +13,22 @@ import (
 // GitHub APIのエンドポイント
 const githubGraphQLEndpoint = "https://api.github.com/graphql"
 
-// 特定のプロジェクトのIssueを取得するためのクエリ用構造体
-type ProjectIssuesQuery struct {
-	User struct {
-		ProjectV2 struct {
-			Id    string
-			Items struct {
-				Nodes []struct {
-					Id      string // ItemIdを取得するためのフィールドを追加
-					Content struct {
-						Issue struct {
-							Title  string
-							Number int
-						} `graphql:"... on Issue"`
-					}
-					Kijitu struct {
-						ProjectV2ItemFieldDateValue struct {
-							Id   string
-							Date string
-						} `graphql:"... on ProjectV2ItemFieldDateValue"`
-					} `graphql:"fieldValueByName(name: \"kijitu\")"`
-				}
-			} `graphql:"items(first: 100)"`
-			// Fields struct {
-			// 	Nodes []struct {
-			// 		ProjectV2Field struct {
-			// 			Id   string
-			// 			Name string
-			// 		} `graphql:"... on ProjectV2Field"`
-			// 	}
-			// } `graphql:"fields(first: 100)"`
-			Field struct {
-				ProjectV2Field struct {
-					Id   string
-					Name string
-				} `graphql:"... on ProjectV2Field"`
-			} `graphql:"field(name: \"kijitu\")"`
-		} `graphql:"projectV2(number: $projectNumber)"`
-	} `graphql:"user(login: $user)"`
+// ミューテーション用の構造体
+type UpdateProjectV2ItemFieldValueInput struct {
+	ItemID    graphql.ID `json:"itemId"`
+	ProjectID graphql.ID `json:"projectId"`
+	FieldID   graphql.ID `json:"fieldId"`
+	Value     struct {
+		Date graphql.String `json:"date"`
+	} `json:"value"`
+}
+
+type Mutation struct {
+	UpdateProjectV2ItemFieldValue struct {
+		ProjectV2Item struct {
+			ID graphql.String `graphql:"id"`
+		} `graphql:"projectV2Item"`
+	} `graphql:"updateProjectV2ItemFieldValue(input: $input)"`
 }
 
 func main() {
@@ -62,7 +39,7 @@ func main() {
 	// GitHubのPersonal Access Token
 	githubToken := os.Getenv("GITHUB_TOKEN_CLASSIC")
 
-	// HTTPクライアントを作成し、Authorizationヘッダーを設定
+	// HTTPクライアントを作成し、カスタムトランスポートを設定
 	httpClient := &http.Client{
 		Transport: &transport{
 			token: githubToken,
@@ -72,34 +49,33 @@ func main() {
 	// GraphQLクライアントを初期化
 	client := graphql.NewClient(githubGraphQLEndpoint, httpClient)
 
-	// クエリ結果を格納する変数
-	var query ProjectIssuesQuery
-
-	// クエリ変数を設定
-	variables := map[string]interface{}{
-		"projectNumber": graphql.Int(3), // プロジェクト番号を指定
-		"user":          graphql.String("mathsuky"),
+	// ミューテーション用の入力データ
+	input := UpdateProjectV2ItemFieldValueInput{
+		ItemID:    "PVTI_lAHOBZSipc4AuISmzgVrKpU",
+		ProjectID: "PVT_kwHOBZSipc4AuISm",
+		FieldID:   "PVTF_lAHOBZSipc4AuISmzgkxryw",
+		Value: struct {
+			Date graphql.String `json:"date"`
+		}{
+			Date: graphql.String("2025-05-01"),
+		},
 	}
 
-	// クエリ実行
-	err = client.Query(context.Background(), &query, variables)
+	// ミューテーションを実行
+	var m Mutation
+	log.Printf("Executing mutation with input: %+v\n", input)
+	err = client.Mutate(context.Background(), &m, map[string]interface{}{
+		"input": input,
+	})
 	if err != nil {
-		log.Fatalf("failed to execute query: %v", err)
+		log.Fatalf("failed to execute mutation: %v", err)
 	}
-	fmt.Println("ProjectId: ", query.User.ProjectV2.Id)
+
 	// 結果を出力
-	fmt.Println("Issues in the Project:")
-	for _, item := range query.User.ProjectV2.Items.Nodes {
-		fmt.Printf("Item ID: %s\nIssue Number: %d\nTitle: %s\nKijitu Date: %s\nKijitu Field ID: %s\n\n", item.Id, item.Content.Issue.Number, item.Content.Issue.Title, item.Kijitu.ProjectV2ItemFieldDateValue.Date, item.Kijitu.ProjectV2ItemFieldDateValue.Id)
-	}
-	fmt.Println("Fields in the Project:")
-	// for _, field := range query.User.ProjectV2.Fields.Nodes {
-	// 	fmt.Printf("Field ID: %s\nField Name: %s\n\n", field.ProjectV2Field.Id, field.ProjectV2Field.Name)
-	// }
-	fmt.Printf("Field ID: %s\nField Name: %s\n\n", query.User.ProjectV2.Field.ProjectV2Field.Id, query.User.ProjectV2.Field.ProjectV2Field.Name)
+	log.Printf("Updated project item ID: %s\n", m.UpdateProjectV2ItemFieldValue.ProjectV2Item.ID)
 }
 
-// HTTPクライアント用のトランスポート構造体
+// HTTPクライアント用のトランスポート構造体（トークン設定）
 type transport struct {
 	token string
 }
@@ -109,20 +85,3 @@ func (t *transport) RoundTrip(req *http.Request) (*http.Response, error) {
 	req.Header.Set("Content-Type", "application/json")
 	return http.DefaultTransport.RoundTrip(req)
 }
-
-// gh api graphql -f query='
-// mutation {
-//   updateProjectV2ItemFieldValue(input: {
-//     itemId: "PVTI_lAHOBZSipc4AuISmzgVltkE",
-//     projectId: "PVT_kwHOBZSipc4AuISm",
-//     fieldId: "PVTF_lAHOBZSipc4AuISmzgkxryw",
-//     value: {
-//       date: "2024-12-31"
-//     }
-//   }) {
-//     projectV2Item {
-//       id
-//     }
-//   }
-// }
-// '
