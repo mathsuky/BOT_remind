@@ -1,0 +1,107 @@
+gh api graphql -f query='
+mutation {
+  updateProjectV2ItemFieldValue(input: {
+    itemId: "PVTI_lAHOBZSipc4AuISmzgVltkE",
+    projectId: "PVT_kwHOBZSipc4AuISm",
+    fieldId: "PVTF_lAHOBZSipc4AuISmzgkxryw",
+    value: {
+      date: "2024-12-31"
+    }
+  }) {
+    projectV2Item {
+      id
+    }
+  }
+}
+'
+
+// 特定のプロジェクトのIssueを取得するためのクエリ用構造体
+type ProjectIssuesQuery struct {
+	User struct {
+		ProjectV2 struct {
+			Id    string
+			Items struct {
+				Nodes []struct {
+					Id      string // ItemIdを取得するためのフィールドを追加
+					Content struct {
+						Issue struct {
+							Title  string
+							Number int
+						} `graphql:"... on Issue"`
+					}
+					Kijitu struct {
+						ProjectV2ItemFieldDateValue struct {
+							Id   string
+							Date string
+						} `graphql:"... on ProjectV2ItemFieldDateValue"`
+					} `graphql:"fieldValueByName(name: \"kijitu\")"`
+				}
+			} `graphql:"items(first: 100)"`
+			// Fields struct {
+			// 	Nodes []struct {
+			// 		ProjectV2Field struct {
+			// 			Id   string
+			// 			Name string
+			// 		} `graphql:"... on ProjectV2Field"`
+			// 	}
+			// } `graphql:"fields(first: 100)"`
+			Field struct {
+				ProjectV2Field struct {
+					Id   string
+					Name string
+				} `graphql:"... on ProjectV2Field"`
+			} `graphql:"field(name: \"kijitu\")"`
+		} `graphql:"projectV2(number: $projectNumber)"`
+	} `graphql:"user(login: $user)"`
+}
+
+type GetProjectBaseInfoQuery struct {
+	User struct {
+		ProjectV2 struct {
+			Id    string
+			Items struct {
+				Nodes []struct {
+					Id      string
+					Content struct {
+						Issue struct {
+							Title  string
+							Number int
+						} `graphql:"... on Issue"`
+					}
+				}
+			} `graphql:"items(first: 100)"`
+			Fields struct {
+				Nodes []struct {
+					ProjectV2Field struct {
+						Id   string
+						Name string
+					} `graphql:"... on ProjectV2Field"`
+				}
+			} `graphql:"fields(first: 100)"`
+		} `graphql:"projectV2(number: $projectNumber)"`
+	} `graphql:"user(login: $user)"`
+}
+
+
+gh api graphql -f query='
+mutation ($itemId: ID!, $projectId: ID!, $fieldId: ID!, $value: Date!) {
+  updateProjectV2ItemFieldValue(input: {itemId: $itemId,　projectId: $projectId,　fieldId: $fieldId,value: {date: $value}
+}) {
+        projectV2Item {
+          id
+        }
+  }
+}
+' -f itemId="PVTI_lAHOBZSipc4AuISmzgVrKpU" \
+   -f projectId="PVT_kwHOBZSipc4AuISm" \
+   -f fieldId="PVTF_lAHOBZSipc4AuISmzgkxryw" \
+   -f value="2025-01-01"
+
+gh api graphql -F input='{
+  "itemId": "PVTI_lAHOBZSipc4AuISmzgVrKpU",
+  "projectId": "PVT_kwHOBZSipc4AuISm",
+  "fieldId": "PVTF_lAHOBZSipc4AuISmzgkxryw",
+  "value": {
+    "date": "2025-01-01"
+  }
+}' -f query='mutation ($input: UpdateProjectV2ItemFieldValueInput!) { updateProjectV2ItemFieldValue(input: $input) { clientMutationId } }

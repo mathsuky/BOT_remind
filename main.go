@@ -2,78 +2,94 @@ package main
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
 	"log"
 	"net/http"
 	"os"
-	"strconv"
 
-	"github.com/bradleyfalzon/ghinstallation/v2"
-	"github.com/google/go-github/v67/github"
+	"github.com/mathsuky/BOT_remind/cache"
+	"github.com/mathsuky/BOT_remind/graphql"
+	"github.com/mathsuky/BOT_remind/transport"
+
+	"github.com/hasura/go-graphql-client"
 	"github.com/joho/godotenv"
 )
 
+const githubGraphQLEndpoint = "https://api.github.com/graphql"
+
 func main() {
-	// .env ファイルを読み込む
 	err := godotenv.Load()
 	if err != nil {
-		log.Fatalf("Error loading .env file")
+		log.Fatalf("error loading .env file")
 	}
 
-	// 環境変数から統合 ID とインストール ID を取得
-	appID, err := strconv.ParseInt(os.Getenv("GITHUB_APP_ID"), 10, 64)
+	githubToken := os.Getenv("GITHUB_TOKEN_CLASSIC")
+	httpClient := &http.Client{
+		Transport: &transport.Transport{
+			Token: githubToken,
+		},
+	}
+	client := graphql.NewClient(githubGraphQLEndpoint, httpClient)
+
+	// キャッシュから情報を取得
+	baseInfo, err := cache.LoadCache()
+	var projectId string
+	var issuesDict map[int]string
+	var fieldsDict map[string]graphql.ID
 	if err != nil {
-		log.Fatalf("Error parsing GITHUB_APP_ID: %v", err)
-	}
-
-	installationID, err := strconv.ParseInt(os.Getenv("GITHUB_INSTALLATION_ID"), 10, 64)
-	if err != nil {
-		log.Fatalf("Error parsing GITHUB_INSTALLATION_ID: %v", err)
-	}
-
-	privateKeyPath := os.Getenv("GITHUB_PRIVATE_KEY_PATH")
-
-	// Wrap the shared transport for use with the integration ID and installation ID.
-	itr, err := ghinstallation.NewKeyFromFile(http.DefaultTransport, appID, installationID, privateKeyPath)
-	if err != nil {
-		log.Fatalf("Error creating installation transport: %v", err)
-	}
-
-	// Use installation transport with client.
-	client := github.NewClient(&http.Client{Transport: itr})
-
-	// 特定のリポジトリのイシューをリストする
-	owner := "mathsuky"
-	repo := "BOT_remind"
-	opts := &github.IssueListByRepoOptions{
-		State: "open", // open/closed/all
-	}
-
-	issues, _, err := client.Issues.ListByRepo(context.Background(), owner, repo, opts)
-	if err != nil {
-		log.Fatalf("Error listing issues for repository: %v", err)
-	}
-
-	// イシューを表示する
-	for _, issue := range issues {
-		fmt.Printf("Issue #%d: %s\n", issue.GetNumber(), issue.GetTitle())
-		fmt.Printf("comments: %d\n", issue.GetComments())
-
-		// イシューのコメントをリストする
-		comments, _, err := client.Issues.ListComments(context.Background(), owner, repo, issue.GetNumber(), nil)
+		projectId, issuesDict, fieldsDict, err = graphql.MakeCache(client)
 		if err != nil {
-			log.Fatalf("Error listing comments for issue #%d: %v", issue.GetNumber(), err)
+			log.Fatalf("failed to make cache: %v", err)
 		}
-
-		// コメントを表示する
-		for _, comment := range comments {
-			commentJSON, err := json.MarshalIndent(comment, "", "  ")
-			if err != nil {
-				log.Fatalf("Error marshalling comment to JSON: %v", err)
-			}
-			fmt.Println(string(commentJSON))
+		err = cache.SaveCache(projectId, issuesDict, fieldsDict)
+		if err != nil {
+			log.Fatalf("failed to save cache: %v", err)
 		}
 	}
-	//
+
+	// 以下はミューテーションの例
+	var targetIssueId int
+	fmt.Printf("Enter the issue number: ")
+	_, err = fmt.Scanf("%d", &targetIssueId)
+	if err != nil {
+		log.Fatalf("failed to read issue number: %v", err)
+	}
+
+	itemId, ok := baseInfo.IssuesDict[targetIssueId]
+	if !ok {
+		projectId, issuesDict, fieldsDict, err = graphql.MakeCache(client)
+		if err != nil {
+			log.Fatalf("failed to make cache: %v", err)
+		}
+		err = cache.SaveCache(projectId, issuesDict, fieldsDict)
+		if err != nil {
+			log.Fatalf("failed to save cache: %v", err)
+		}
+		itemId, ok = issuesDict[targetIssueId]
+		if !ok {
+			log.Fatalf("issue number %d is not found", targetIssueId)
+		}
+	}
+
+	input := graphql.UpdateProjectV2ItemFieldValueInput{
+		ItemID:    graphql.ID(itemId),
+		ProjectID: "PVT_kwHOBZSipc4AuISm",
+		FieldID:   "PVTF_lAHOBZSipc4AuISmzgkxryw",
+		Value: struct {
+			Date graphql.String `json:"date"`
+		}{
+			Date: graphql.String("2025-05-02"),
+		},
+	}
+	var m graphql.Mutation
+	log.Printf("Executing mutation with input: %+v\n", input)
+	err = client.Mutate(context.Background(), &m, map[string]interface{}{
+		"input": input,
+	})
+	if err != nil {
+		log.Fatalf("failed to execute mutation: %v", err)
+	}
+
+	// 結果を出力
+	log.Printf("Updated project item ID: %s\n", m.UpdateProjectV2ItemFieldValue.ProjectV2Item.ID)
 }
