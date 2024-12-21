@@ -1,9 +1,11 @@
 package cache
 
 import (
+	"context"
 	"encoding/json"
 	"os"
-	"github.com/mathsuky/BOT_remind/graphql"
+
+	graphql "github.com/mathsuky/BOT_remind/query"
 )
 
 const cacheFilePath = "cache.json"
@@ -49,4 +51,28 @@ func SaveCache(id string, dic1 map[int]string, dic2 map[string]graphql.ID) error
 	}
 
 	return nil
+}
+
+func MakeCache(client *graphql.Client) (string, map[int]string, map[string]graphql.ID, error) {
+	var info GetProjectBaseInfoQuery
+	// キャッシュがない場合はクエリを実行してキャッシュを保存
+	err := client.Query(context.Background(), &info, map[string]interface{}{
+		"projectNumber": graphql.Int(3),
+		"user":          graphql.String("mathsuky"),
+	})
+	if err != nil {
+		return "", nil, nil, err
+	}
+
+	projectId := info.User.ProjectV2.Id
+	issuesDict := make(map[int]string)
+	for _, item := range info.User.ProjectV2.Items.Nodes {
+		issuesDict[item.Content.Issue.Number] = item.Id
+	}
+	fieldsDict := make(map[string]graphql.ID)
+	for _, field := range info.User.ProjectV2.Fields.Nodes {
+		fieldsDict[field.ProjectV2Field.Name] = graphql.ID(field.ProjectV2Field.Id)
+	}
+
+	return projectId, issuesDict, fieldsDict, nil
 }

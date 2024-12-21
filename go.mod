@@ -1,4 +1,4 @@
-module github.com/mathsuky/BOT_Spotify
+module github.com/mathsuky/BOT_remind
 
 go 1.23
 

@@ -8,10 +8,10 @@ import (
 	"os"
 
 	"github.com/mathsuky/BOT_remind/cache"
-	"github.com/mathsuky/BOT_remind/graphql"
+	customgraphql "github.com/mathsuky/BOT_remind/query"
 	"github.com/mathsuky/BOT_remind/transport"
 
-	"github.com/hasura/go-graphql-client"
+	graphql "github.com/hasura/go-graphql-client"
 	"github.com/joho/godotenv"
 )
 
@@ -37,7 +37,7 @@ func main() {
 	var issuesDict map[int]string
 	var fieldsDict map[string]graphql.ID
 	if err != nil {
-		projectId, issuesDict, fieldsDict, err = graphql.MakeCache(client)
+		projectId, issuesDict, fieldsDict, err = cache.MakeCache(client)
 		if err != nil {
 			log.Fatalf("failed to make cache: %v", err)
 		}
@@ -57,7 +57,7 @@ func main() {
 
 	itemId, ok := baseInfo.IssuesDict[targetIssueId]
 	if !ok {
-		projectId, issuesDict, fieldsDict, err = graphql.MakeCache(client)
+		projectId, issuesDict, fieldsDict, err = cache.MakeCache(client)
 		if err != nil {
 			log.Fatalf("failed to make cache: %v", err)
 		}
@@ -71,7 +71,7 @@ func main() {
 		}
 	}
 
-	input := graphql.UpdateProjectV2ItemFieldValueInput{
+	input := customgraphql.UpdateProjectV2ItemFieldValueInput{
 		ItemID:    graphql.ID(itemId),
 		ProjectID: "PVT_kwHOBZSipc4AuISm",
 		FieldID:   "PVTF_lAHOBZSipc4AuISmzgkxryw",
@@ -81,7 +81,7 @@ func main() {
 			Date: graphql.String("2025-05-02"),
 		},
 	}
-	var m graphql.Mutation
+	var m customgraphql.Mutation
 	log.Printf("Executing mutation with input: %+v\n", input)
 	err = client.Mutate(context.Background(), &m, map[string]interface{}{
 		"input": input,
