@@ -8,10 +8,10 @@ import (
 	"os"
 
 	"github.com/mathsuky/BOT_remind/cache"
-	customgraphql "github.com/mathsuky/BOT_remind/query"
+	"github.com/mathsuky/BOT_remind/query"
 	"github.com/mathsuky/BOT_remind/transport"
 
-	graphql "github.com/hasura/go-graphql-client"
+	"github.com/hasura/go-graphql-client"
 	"github.com/joho/godotenv"
 )
 
@@ -71,7 +71,7 @@ func main() {
 		}
 	}
 
-	input := customgraphql.UpdateProjectV2ItemFieldValueInput{
+	input := query.UpdateProjectV2ItemFieldValueInput{
 		ItemID:    graphql.ID(itemId),
 		ProjectID: "PVT_kwHOBZSipc4AuISm",
 		FieldID:   "PVTF_lAHOBZSipc4AuISmzgkxryw",
@@ -81,7 +81,7 @@ func main() {
 			Date: graphql.String("2025-05-02"),
 		},
 	}
-	var m customgraphql.Mutation
+	var m query.Mutation
 	log.Printf("Executing mutation with input: %+v\n", input)
 	err = client.Mutate(context.Background(), &m, map[string]interface{}{
 		"input": input,

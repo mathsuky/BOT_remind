@@ -5,7 +5,8 @@ import (
 	"encoding/json"
 	"os"
 
-	graphql "github.com/mathsuky/BOT_remind/query"
+	"github.com/hasura/go-graphql-client"
+	"github.com/mathsuky/BOT_remind/query"
 )
 
 const cacheFilePath = "cache.json"
@@ -54,7 +55,7 @@ func SaveCache(id string, dic1 map[int]string, dic2 map[string]graphql.ID) error
 }
 
 func MakeCache(client *graphql.Client) (string, map[int]string, map[string]graphql.ID, error) {
-	var info GetProjectBaseInfoQuery
+	var info query.GetProjectBaseInfoQuery
 	// キャッシュがない場合はクエリを実行してキャッシュを保存
 	err := client.Query(context.Background(), &info, map[string]interface{}{
 		"projectNumber": graphql.Int(3),
