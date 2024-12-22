@@ -20,7 +20,7 @@ func Start(client *graphql.Client, accessToken string) error {
 
 	// メッセージハンドラを登録
 	bot.OnMessageCreated(func(p *payload.MessageCreated) {
-		response, err := handleMessage(client, p)
+		response, err := HandleMessage(client, p)
 		if err != nil {
 			log.Println(err)
 		}

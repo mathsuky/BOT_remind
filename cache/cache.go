@@ -79,7 +79,7 @@ func MakeCache(client *graphql.Client) (string, map[int]string, map[string]graph
 	return projectId, issuesDict, fieldsDict, nil
 }
 
-func loadOrMakeCache(client *graphql.Client) (string, map[int]string, map[string]graphql.ID, error) {
+func LoadOrMakeCache(client *graphql.Client) (string, map[int]string, map[string]graphql.ID, error) {
 	baseInfo, err := LoadCache()
 	if err == nil {
 		return baseInfo.ID, baseInfo.IssuesDict, baseInfo.FieldsDict, nil

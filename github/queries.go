@@ -13,13 +13,13 @@ import (
 // UpdateDeadline は指定された issue に期日を設定する
 func UpdateDeadline(client *graphql.Client, date string, targetIssueId int) (string, error) {
 	// キャッシュの読み込みまたは作成
-	projectId, issuesDict, fieldsDict, err := cache.loadOrMakeCache(client)
+	projectId, issuesDict, fieldsDict, err := cache.LoadOrMakeCache(client)
 	if err != nil {
 		return "キャッシュの読み込みまたは作成に失敗しました。", err
 	}
 
 	// issue とフィールドの確認
-	itemId, fieldId, err := checkIssueAndField(client, issuesDict, fieldsDict, targetIssueId, "kijitu")
+	itemId, fieldId, err := CheckIssueAndField(client, issuesDict, fieldsDict, targetIssueId, "kijitu")
 	if err != nil {
 		return "issueが紐づけられていないか，期日を記入するフィールドが存在しませんでした。", err
 	}
@@ -49,7 +49,7 @@ func UpdateDeadline(client *graphql.Client, date string, targetIssueId int) (str
 }
 
 // checkIssueAndField は指定された issue ID とフィールドキーがキャッシュに存在するか確認します
-func checkIssueAndField(client *graphql.Client, issuesDict map[int]string, fieldsDict map[string]graphql.ID, targetIssueId int, fieldKey string) (string, graphql.ID, error) {
+func CheckIssueAndField(client *graphql.Client, issuesDict map[int]string, fieldsDict map[string]graphql.ID, targetIssueId int, fieldKey string) (string, graphql.ID, error) {
 	itemId, ok := issuesDict[targetIssueId]
 	fieldId, ok2 := fieldsDict[fieldKey]
 	if !ok || !ok2 {

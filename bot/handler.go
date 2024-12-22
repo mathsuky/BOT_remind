@@ -10,7 +10,7 @@ import (
 	"github.com/traPtitech/traq-ws-bot/payload"
 )
 
-func handleMessage(client *graphql.Client, p *payload.MessageCreated) (string, error) {
+func HandleMessage(client *graphql.Client, p *payload.MessageCreated) (string, error) {
 	log.Println("Received MESSAGE_CREATED event: " + p.Message.Text)
 	parts := strings.Split(p.Message.Text, " ")
 
