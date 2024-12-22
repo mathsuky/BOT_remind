@@ -20,6 +20,25 @@ import (
 
 // const githubGraphQLEndpoint = "https://api.github.com/graphql"
 
+func handleMessage(p *payload.MessageCreated) (string, error) {
+	log.Println("Received MESSAGE_CREATED event: " + p.Message.Text)
+	content := p.Message.Text
+	parts := strings.Split(content, " ")
+	user := p.Message.User
+	log.Println(user)
+	log.Println(parts)
+	if len(parts) < 2 {
+		return "Please input valid command.", nil
+	}
+	if parts[1] == "/hello" {
+		return "Hello, world!", nil
+	} else if parts[1] == "/baka" {
+		return "Baka is " + fmt.Sprintf(`!{"type":"user","raw":"@%s","id":"%s"}`, user.Name, user.ID) + "!", nil
+	} else {
+		return "Please input valid command.", nil
+	}
+}
+
 func main() {
 	err := godotenv.Load()
 	if err != nil {
@@ -36,18 +55,10 @@ func main() {
 	// content := `!{"type":"user","raw":"@masky5859","id":"1eea935c-0d3c-411b-a565-1b09565237f4"} is :lol_Slander_Max_Baka:`
 	var content string
 	bot.OnMessageCreated(func(p *payload.MessageCreated) {
-		log.Println("Received MESSAGE_CREATED event: " + p.Message.Text)
-		content = p.Message.Text
-		parts := strings.Split(content, " ")
-		user := p.Message.User
-		log.Println(user)
-		log.Println(parts)
-		if parts[1] == "/hello" {
-			content = "Hello, world!"
-		} else if parts[1] == "/baka" {
-			content = "Baka is " + fmt.Sprintf(`!{"type":"user","raw":"@%s","id":"%s"}`, user.Name, user.ID) + "!"
-		} else {
-			content = "Unknown command."
+		content, err = handleMessage(p)
+		if err != nil {
+			log.Println(err)
+			return
 		}
 		_, _, err := bot.API().
 			MessageApi.
