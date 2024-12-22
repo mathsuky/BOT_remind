@@ -20,71 +20,87 @@ import (
 
 const githubGraphQLEndpoint = "https://api.github.com/graphql"
 
-func setDeadline(date string, targetIssueId int) error {
+func getClient() (*graphql.Client, error) {
 	githubToken := os.Getenv("GITHUB_TOKEN_CLASSIC")
+	if githubToken == "" {
+		return nil, fmt.Errorf("GITHUB_TOKEN_CLASSIC is not set")
+	}
 	httpClient := &http.Client{
 		Transport: &transport.Transport{
 			Token: githubToken,
 		},
 	}
 	client := graphql.NewClient(githubGraphQLEndpoint, httpClient)
+	return client, nil
+}
 
+func loadOrMakeCache(client *graphql.Client) (string, map[int]string, map[string]graphql.ID, error) {
 	baseInfo, err := cache.LoadCache()
-	var projectId string
-	var issuesDict map[int]string
-	var fieldsDict map[string]graphql.ID
-	if err != nil {
-		projectId, issuesDict, fieldsDict, err = cache.MakeCache(client)
-		if err != nil {
-			return fmt.Errorf("failed to make cache: %v", err)
-		}
-		err = cache.SaveCache(projectId, issuesDict, fieldsDict)
-		if err != nil {
-			return fmt.Errorf("failed to save cache: %v", err)
-		}
+	if err == nil {
+		return baseInfo.ID, baseInfo.IssuesDict, baseInfo.FieldsDict, nil
 	}
 
-	itemId, ok := baseInfo.IssuesDict[targetIssueId]
-	if !ok {
-		projectId, issuesDict, fieldsDict, err = cache.MakeCache(client)
-		if err != nil {
-			return fmt.Errorf("failed to make cache: %v", err)
-		}
-		err = cache.SaveCache(projectId, issuesDict, fieldsDict)
-		if err != nil {
-			return fmt.Errorf("failed to save cache: %v", err)
-		}
-		itemId, ok = issuesDict[targetIssueId]
-		if !ok {
-			return fmt.Errorf("issue number %d is not found", targetIssueId)
-		}
+	projectId, issuesDict, fieldsDict, err := cache.MakeCache(client)
+	if err != nil {
+		return "", nil, nil, fmt.Errorf("failed to make cache: %v", err)
+	}
+	err = cache.SaveCache(projectId, issuesDict, fieldsDict)
+	if err != nil {
+		return "", nil, nil, fmt.Errorf("failed to save cache: %v", err)
+	}
+	return projectId, issuesDict, fieldsDict, nil
+}
+
+func updateDeadline(client *graphql.Client, date string, targetIssueId int) (string, error) {
+	projectId, issuesDict, fieldsDict, err := loadOrMakeCache(client)
+	if err != nil {
+		return "キャッシュの読み込みまたは作成に失敗しました。", err
+	}
+
+	itemId, fieldId, err := checkIssueAndField(client, issuesDict, fieldsDict, targetIssueId, "kijitu")
+	if err != nil {
+		return "issueが紐づけられていないか，期日を記入するフィールドが存在しませんでした。", err
 	}
 
 	input := query.UpdateProjectV2ItemFieldValueInput{
 		ItemID:    graphql.ID(itemId),
-		ProjectID: "PVT_kwHOBZSipc4AuISm",
-		FieldID:   "PVTF_lAHOBZSipc4AuISmzgkxryw",
+		ProjectID: graphql.ID(projectId),
+		FieldID:   graphql.ID(fieldId),
 		Value: struct {
 			Date graphql.String `json:"date"`
 		}{
 			Date: graphql.String(date),
 		},
 	}
-	var m query.Mutation
+	var m query.UpdateProjectV2ItemFieldValue
 	log.Printf("Executing mutation with input: %+v\n", input)
 	err = client.Mutate(context.Background(), &m, map[string]interface{}{
 		"input": input,
 	})
 	if err != nil {
-		return fmt.Errorf("failed to execute mutation: %v", err)
+		return "ミューテーションの実行に失敗しました。", fmt.Errorf("failed to execute mutation: %v", err)
 	}
-
-	// 結果を出力
-	log.Printf("Updated project item ID: %s\n", m.UpdateProjectV2ItemFieldValue.ProjectV2Item.ID)
-	return nil
+	return "期日が正常に設定されました。", nil
 }
 
-func handleMessage(p *payload.MessageCreated) (string, error) {
+func checkIssueAndField(client *graphql.Client, issuesDict map[int]string, fieldsDict map[string]graphql.ID, targetIssueId int, fieldKey string) (string, graphql.ID, error) {
+	itemId, ok := issuesDict[targetIssueId]
+	fieldId, ok2 := fieldsDict[fieldKey]
+	if !ok || !ok2 {
+		_, issuesDict, fieldsDict, err := cache.MakeCache(client)
+		if err != nil {
+			return "", "", fmt.Errorf("failed to make cache: %v", err)
+		}
+		itemId, ok = issuesDict[targetIssueId]
+		fieldId, ok2 = fieldsDict[fieldKey]
+		if !ok || !ok2 {
+			return "", "", fmt.Errorf("issue or field not found")
+		}
+	}
+	return itemId, fieldId, nil
+}
+
+func handleMessage(client *graphql.Client, p *payload.MessageCreated) (string, error) {
 	log.Println("Received MESSAGE_CREATED event: " + p.Message.Text)
 	content := p.Message.Text
 	parts := strings.Split(content, " ")
@@ -99,7 +115,7 @@ func handleMessage(p *payload.MessageCreated) (string, error) {
 	} else if parts[1] == "/baka" {
 		return "Baka is " + fmt.Sprintf(`!{"type":"user","raw":"@%s","id":"%s"}`, user.Name, user.ID) + "!", nil
 	} else if parts[1] == "/deadline" {
-		// requierd: @BOT_remind deadline <date> <issue number>
+		// required: @BOT_remind deadline <date> <issue number>
 		if len(parts) < 4 {
 			return "十分な引数を提供してください。", nil
 		}
@@ -111,10 +127,14 @@ func handleMessage(p *payload.MessageCreated) (string, error) {
 		if err != nil {
 			return "有効なコマンドを入力してください。", nil
 		}
-		err = setDeadline(date, targetIssueId)
 		if err != nil {
-			return "期日の設定に失敗しました。", err
+			return "クライアントの取得に失敗しました。", err
 		}
+		errorString, err := updateDeadline(client, date, targetIssueId)
+		if err != nil {
+			return errorString, err
+		}
+		return errorString, nil
 	}
 	return "正しいコマンドを入力してください。", nil
 }
@@ -125,6 +145,10 @@ func main() {
 		log.Fatalf("error loading .env file")
 	}
 
+	client, err := getClient()
+	if err != nil {
+		log.Fatalf("failed to get client: %v", err)
+	}
 	bot, err := traqwsbot.NewBot(&traqwsbot.Options{
 		AccessToken: os.Getenv("TRAQ_BOT_ACCESS_TOKEN"),
 	})
@@ -132,13 +156,11 @@ func main() {
 		panic(err)
 	}
 
-	// content := `!{"type":"user","raw":"@masky5859","id":"1eea935c-0d3c-411b-a565-1b09565237f4"} is :lol_Slander_Max_Baka:`
 	var content string
 	bot.OnMessageCreated(func(p *payload.MessageCreated) {
-		content, err = handleMessage(p)
+		content, err = handleMessage(client, p)
 		if err != nil {
 			log.Println(err)
-			return
 		}
 		_, _, err := bot.API().
 			MessageApi.

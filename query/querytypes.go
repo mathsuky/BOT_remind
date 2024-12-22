@@ -15,7 +15,7 @@ type UpdateProjectV2ItemFieldValueInput struct {
 	} `json:"value"`
 }
 
-type Mutation struct {
+type UpdateProjectV2ItemFieldValue struct {
 	UpdateProjectV2ItemFieldValue struct {
 		ProjectV2Item struct {
 			ID graphql.String `graphql:"id"`
