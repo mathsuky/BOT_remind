@@ -2,14 +2,23 @@ package main
 
 import (
 	"context"
+	"fmt"
 	"log"
 	"os"
+	"strings"
 
 	"github.com/joho/godotenv"
 	traq "github.com/traPtitech/go-traq"
 	traqwsbot "github.com/traPtitech/traq-ws-bot"
 	payload "github.com/traPtitech/traq-ws-bot/payload"
 )
+
+// "github.com/mathsuky/BOT_remind/cache"
+// "github.com/mathsuky/BOT_remind/query"
+// "github.com/mathsuky/BOT_remind/transport"
+// "github.com/hasura/go-graphql-client"
+
+// const githubGraphQLEndpoint = "https://api.github.com/graphql"
 
 func main() {
 	err := godotenv.Load()
@@ -24,13 +33,27 @@ func main() {
 		panic(err)
 	}
 
+	// content := `!{"type":"user","raw":"@masky5859","id":"1eea935c-0d3c-411b-a565-1b09565237f4"} is :lol_Slander_Max_Baka:`
+	var content string
 	bot.OnMessageCreated(func(p *payload.MessageCreated) {
 		log.Println("Received MESSAGE_CREATED event: " + p.Message.Text)
+		content = p.Message.Text
+		parts := strings.Split(content, " ")
+		user := p.Message.User
+		log.Println(user)
+		log.Println(parts)
+		if parts[1] == "/hello" {
+			content = "Hello, world!"
+		} else if parts[1] == "/baka" {
+			content = "Baka is " + fmt.Sprintf(`!{"type":"user","raw":"@%s","id":"%s"}`, user.Name, user.ID) + "!"
+		} else {
+			content = "Unknown command."
+		}
 		_, _, err := bot.API().
 			MessageApi.
 			PostMessage(context.Background(), p.Message.ChannelID).
 			PostMessageRequest(traq.PostMessageRequest{
-				Content: `!{"type":"user","raw":"@masky5859","id":"1eea935c-0d3c-411b-a565-1b09565237f4"}`,
+				Content: content,
 			}).
 			Execute()
 		if err != nil {

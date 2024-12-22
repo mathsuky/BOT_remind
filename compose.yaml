@@ -1,0 +1,12 @@
+version: "3.8"
+
+services:
+  app:
+    build: .
+    volumes:
+      - .:/app
+      - /app/tmp
+    ports:
+      - "8080:8080"
+    environment:
+      - AIR_WATCH_DELAY=1000
