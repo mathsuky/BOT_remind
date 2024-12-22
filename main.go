@@ -127,9 +127,6 @@ func handleMessage(client *graphql.Client, p *payload.MessageCreated) (string, e
 		if err != nil {
 			return "有効なコマンドを入力してください。", nil
 		}
-		if err != nil {
-			return "クライアントの取得に失敗しました。", err
-		}
 		errorString, err := updateDeadline(client, date, targetIssueId)
 		if err != nil {
 			return errorString, err

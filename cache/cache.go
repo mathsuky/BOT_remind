@@ -3,6 +3,7 @@ package cache
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"os"
 
 	"github.com/hasura/go-graphql-client"
@@ -75,5 +76,22 @@ func MakeCache(client *graphql.Client) (string, map[int]string, map[string]graph
 		fieldsDict[field.ProjectV2Field.Name] = graphql.ID(field.ProjectV2Field.Id)
 	}
 
+	return projectId, issuesDict, fieldsDict, nil
+}
+
+func loadOrMakeCache(client *graphql.Client) (string, map[int]string, map[string]graphql.ID, error) {
+	baseInfo, err := LoadCache()
+	if err == nil {
+		return baseInfo.ID, baseInfo.IssuesDict, baseInfo.FieldsDict, nil
+	}
+
+	projectId, issuesDict, fieldsDict, err := MakeCache(client)
+	if err != nil {
+		return "", nil, nil, fmt.Errorf("failed to make cache: %v", err)
+	}
+	err = SaveCache(projectId, issuesDict, fieldsDict)
+	if err != nil {
+		return "", nil, nil, fmt.Errorf("failed to save cache: %v", err)
+	}
 	return projectId, issuesDict, fieldsDict, nil
 }
