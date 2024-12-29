@@ -37,29 +37,26 @@ func UpdateDeadline(client *graphql.Client, date string, targetIssueId int) (str
 		ItemID:    graphql.ID(goalItemId),
 		ProjectID: graphql.ID(projectId),
 		FieldID:   graphql.ID(goalFieldId),
-		Value: struct {
-			Date graphql.String `json:"date"`
-		}{
-			Date: graphql.String(date),
+		Value: query.FieldValue{
+			"date": date, // 目標フィールドがDate型の場合
 		},
 	}
 	input2 := query.UpdateProjectV2ItemFieldValueInput{
 		ItemID:    graphql.ID(startItemId),
 		ProjectID: graphql.ID(projectId),
 		FieldID:   graphql.ID(startFieldId),
-		Value: struct {
-			Date graphql.String `json:"date"`
-		}{
-			Date: graphql.String(nowDate),
+		Value: query.FieldValue{
+			"date": nowDate, // 目標開始日フィールドがDate型の場合
 		},
 	}
+
 	vars := map[string]interface{}{
 		"input1": input1,
 		"input2": input2,
 	}
 
 	// ミューテーションの実行
-	var mutation query.UpdateTwoFieldsMutation
+	var mutation query.UpdateRelatedIssueDeadlineMutation
 	err = client.Mutate(context.Background(), &mutation, vars)
 	if err != nil {
 		return "ミューテーションの実行に失敗しました。", err
