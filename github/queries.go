@@ -3,7 +3,7 @@ package github
 import (
 	"context"
 	"fmt"
-	"log"
+
 	"time"
 
 	"github.com/hasura/go-graphql-client"
@@ -11,78 +11,62 @@ import (
 	"github.com/mathsuky/BOT_remind/query"
 )
 
-// UpdateDeadline は指定された issue に期日を設定する
 func UpdateDeadline(client *graphql.Client, date string, targetIssueId int) (string, error) {
-	// キャッシュの読み込みまたは作成
+	// APIを叩くための基本情報を取得
 	projectId, issuesDict, fieldsDict, err := cache.LoadOrMakeCache(client)
 	if err != nil {
 		return "キャッシュの読み込みまたは作成に失敗しました。", err
 	}
-
-	// issue とフィールドの確認
-	itemId, fieldId, err := CheckIssueAndField(client, issuesDict, fieldsDict, targetIssueId, "目標")
+	goalItemId, goalFieldId, err := CheckIssueAndField(client, issuesDict, fieldsDict, targetIssueId, "目標")
 	if err != nil {
-		return "issueが紐づけられていないか，期日を記入するフィールドが存在しませんでした。", err
+		return "issueが紐づけられていないか，「目標」フィールドが存在しませんでした。", err
+	}
+	startItemId, startFieldId, err := CheckIssueAndField(client, issuesDict, fieldsDict, targetIssueId, "目標開始日")
+	if err != nil {
+		return "issueが紐づけられていないか，「目標開始日」フィールドが存在しませんでした。", err
 	}
 
-	// ミューテーションの入力
-	input := query.UpdateProjectV2ItemFieldValueInput{
-		ItemID:    graphql.ID(itemId),
+	// APIを叩くための変数を設定
+	jst, err := time.LoadLocation("Asia/Tokyo")
+	if err != nil {
+		return "タイムゾーンの取得に失敗しました。", err
+	}
+	nowDate := time.Now().In(jst).Format("2006-01-02")
+
+	input1 := query.UpdateProjectV2ItemFieldValueInput{
+		ItemID:    graphql.ID(goalItemId),
 		ProjectID: graphql.ID(projectId),
-		FieldID:   graphql.ID(fieldId),
+		FieldID:   graphql.ID(goalFieldId),
 		Value: struct {
 			Date graphql.String `json:"date"`
 		}{
 			Date: graphql.String(date),
 		},
 	}
-
-	var mutation query.UpdateProjectV2ItemFieldValue
-	log.Printf("Executing mutation with input: %+v\n", input)
-	err = client.Mutate(context.Background(), &mutation, map[string]interface{}{
-		"input": input,
-	})
-	if err != nil {
-		return "ミューテーションの実行に失敗しました。", fmt.Errorf("failed to execute mutation: %v", err)
-	}
-
-	// issue とフィールドの確認
-	itemId, fieldId, err = CheckIssueAndField(client, issuesDict, fieldsDict, targetIssueId, "目標開始日")
-	if err != nil {
-		return "issueが紐づけられていないか，期日を記入するフィールドが存在しませんでした。", err
-	}
-
-	jst, err := time.LoadLocation("Asia/Tokyo")
-	if err != nil {
-		return "タイムゾーンの取得に失敗しました。", err
-	}
-	now := time.Now().In(jst)
-	nowDate := now.Format("2006-01-02")
-
-	// ミューテーションの入力
-	input = query.UpdateProjectV2ItemFieldValueInput{
-		ItemID:    graphql.ID(itemId),
+	input2 := query.UpdateProjectV2ItemFieldValueInput{
+		ItemID:    graphql.ID(startItemId),
 		ProjectID: graphql.ID(projectId),
-		FieldID:   graphql.ID(fieldId),
+		FieldID:   graphql.ID(startFieldId),
 		Value: struct {
 			Date graphql.String `json:"date"`
 		}{
 			Date: graphql.String(nowDate),
 		},
 	}
-
-	log.Printf("Executing mutation with input: %+v\n", input)
-	err = client.Mutate(context.Background(), &mutation, map[string]interface{}{
-		"input": input,
-	})
-	if err != nil {
-		return "ミューテーションの実行に失敗しました。", fmt.Errorf("failed to execute mutation: %v", err)
+	vars := map[string]interface{}{
+		"input1": input1,
+		"input2": input2,
 	}
 
+	// ミューテーションの実行
+	var mutation query.UpdateTwoFieldsMutation
+	err = client.Mutate(context.Background(), &mutation, vars)
+	if err != nil {
+		return "ミューテーションの実行に失敗しました。", err
+	}
 	return "期日が正常に設定されました。", nil
 }
 
-// checkIssueAndField は指定された issue ID とフィールドキーがキャッシュに存在するか確認します
 func CheckIssueAndField(client *graphql.Client, issuesDict map[int]string, fieldsDict map[string]graphql.ID, targetIssueId int, fieldKey string) (string, graphql.ID, error) {
 	itemId, ok := issuesDict[targetIssueId]
 	fieldId, ok2 := fieldsDict[fieldKey]

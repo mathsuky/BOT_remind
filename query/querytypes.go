@@ -23,6 +23,42 @@ type UpdateProjectV2ItemFieldValue struct {
 	} `graphql:"updateProjectV2ItemFieldValue(input: $input)"`
 }
 
+type UpdateTwoFieldsMutation struct {
+	UpdateGoal struct {
+		ProjectV2Item struct {
+			ID graphql.String `graphql:"id"`
+		} `graphql:"projectV2Item"`
+	} `graphql:"updateGoal:updateProjectV2ItemFieldValue(input: $input1)"`
+	UpdateStart struct {
+		ProjectV2Item struct {
+			ID graphql.String `graphql:"id"`
+		} `graphql:"projectV2Item"`
+	} `graphql:"updateStart:updateProjectV2ItemFieldValue(input: $input2)"`
+}
+
+type UpdateRelatedIssueDeadlineMutation struct {
+	UpdateStart struct {
+		ProjectV2Item struct {
+			ID graphql.String `graphql:"id"`
+		} `graphql:"projectV2Item"`
+	} `graphql:"updateStart:updateProjectV2ItemFieldValue(input: $input1)"`
+	UpdateGoal struct {
+		ProjectV2Item struct {
+			ID graphql.String `graphql:"id"`
+		} `graphql:"projectV2Item"`
+	} `graphql:"updateGoal:updateProjectV2ItemFieldValue(input: $input2)"`
+	UpdateAssigner struct {
+		ProjectV2Item struct {
+			ID graphql.String `graphql:"id"`
+		} `graphql:"projectV2Item"`
+	} `graphql:"updateAssigner:updateProjectV2ItemFieldValue(input: $input3)"`
+	UpdateTraqId struct {
+		ProjectV2Item struct {
+			ID graphql.String `graphql:"id"`
+		} `graphql:"projectV2Item"`
+	} `graphql:"updateTraqId:updateProjectV2ItemFieldValue(input: $input4)"`
+}
+
 type GetProjectBaseInfoQuery struct {
 	User struct {
 		ProjectV2 struct {
