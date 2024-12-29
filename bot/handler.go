@@ -5,6 +5,8 @@ import (
 	"log"
 	"strings"
 
+	"time"
+
 	"github.com/hasura/go-graphql-client"
 	"github.com/mathsuky/BOT_remind/github"
 	"github.com/traPtitech/traq-ws-bot/payload"
@@ -20,7 +22,13 @@ func HandleMessage(client *graphql.Client, p *payload.MessageCreated) (string, e
 
 	switch parts[1] {
 	case "/hello":
-		return "Hello, world!", nil
+		jst, err := time.LoadLocation("Asia/Tokyo")
+		if err != nil {
+			return "タイムゾーンの取得に失敗しました。", err
+		}
+		now := time.Now().In(jst)
+		date := now.Format("2006-01-02")
+		return "こんにちは！今日は" + date + "です。", nil
 	case "/deadline":
 		if len(parts) < 4 {
 			return "十分な引数を提供してください。", nil

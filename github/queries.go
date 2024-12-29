@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"log"
+	"time"
 
 	"github.com/hasura/go-graphql-client"
 	"github.com/mathsuky/BOT_remind/cache"
@@ -19,7 +20,7 @@ func UpdateDeadline(client *graphql.Client, date string, targetIssueId int) (str
 	}
 
 	// issue とフィールドの確認
-	itemId, fieldId, err := CheckIssueAndField(client, issuesDict, fieldsDict, targetIssueId, "kijitu")
+	itemId, fieldId, err := CheckIssueAndField(client, issuesDict, fieldsDict, targetIssueId, "目標")
 	if err != nil {
 		return "issueが紐づけられていないか，期日を記入するフィールドが存在しませんでした。", err
 	}
@@ -37,6 +38,39 @@ func UpdateDeadline(client *graphql.Client, date string, targetIssueId int) (str
 	}
 
 	var mutation query.UpdateProjectV2ItemFieldValue
+	log.Printf("Executing mutation with input: %+v\n", input)
+	err = client.Mutate(context.Background(), &mutation, map[string]interface{}{
+		"input": input,
+	})
+	if err != nil {
+		return "ミューテーションの実行に失敗しました。", fmt.Errorf("failed to execute mutation: %v", err)
+	}
+
+	// issue とフィールドの確認
+	itemId, fieldId, err = CheckIssueAndField(client, issuesDict, fieldsDict, targetIssueId, "目標開始日")
+	if err != nil {
+		return "issueが紐づけられていないか，期日を記入するフィールドが存在しませんでした。", err
+	}
+
+	jst, err := time.LoadLocation("Asia/Tokyo")
+	if err != nil {
+		return "タイムゾーンの取得に失敗しました。", err
+	}
+	now := time.Now().In(jst)
+	nowDate := now.Format("2006-01-02")
+
+	// ミューテーションの入力
+	input = query.UpdateProjectV2ItemFieldValueInput{
+		ItemID:    graphql.ID(itemId),
+		ProjectID: graphql.ID(projectId),
+		FieldID:   graphql.ID(fieldId),
+		Value: struct {
+			Date graphql.String `json:"date"`
+		}{
+			Date: graphql.String(nowDate),
+		},
+	}
+
 	log.Printf("Executing mutation with input: %+v\n", input)
 	err = client.Mutate(context.Background(), &mutation, map[string]interface{}{
 		"input": input,
