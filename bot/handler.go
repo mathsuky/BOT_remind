@@ -14,6 +14,7 @@ import (
 
 func HandleMessage(client *graphql.Client, p *payload.MessageCreated) (string, error) {
 	log.Println("Received MESSAGE_CREATED event: " + p.Message.Text)
+	log.Println("User: " + p.Message.User.Name)
 	parts := strings.Split(p.Message.Text, " ")
 
 	if len(parts) < 2 {
@@ -39,6 +40,15 @@ func HandleMessage(client *graphql.Client, p *payload.MessageCreated) (string, e
 			return "有効な issue ID を入力してください。", nil
 		}
 		return github.UpdateDeadline(client, date, issueID)
+	case "/assign":
+		if len(parts) < 3 {
+			return "十分な引数を提供してください。", nil
+		}
+		issueID := 0
+		if _, err := fmt.Sscanf(parts[2], "%d", &issueID); err != nil {
+			return "有効な issue ID を入力してください。", nil
+		}
+		return github.UpdateAssigner(client, issueID, p.Message.User.Name)
 	default:
 		return "正しいコマンドを入力してください。", nil
 	}

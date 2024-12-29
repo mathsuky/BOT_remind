@@ -64,6 +64,40 @@ func UpdateDeadline(client *graphql.Client, date string, targetIssueId int) (str
 	return "期日が正常に設定されました。", nil
 }
 
+func UpdateAssigner(client *graphql.Client, targetIssueId int, tId string) (string, error) {
+	// APIを叩くための基本情報を取得
+	projectId, issuesDict, fieldsDict, err := cache.LoadOrMakeCache(client)
+	if err != nil {
+		return "キャッシュの読み込みまたは作成に失敗しました。", err
+	}
+	traqIDItemId, traqIDFieldId, err := CheckIssueAndField(client, issuesDict, fieldsDict, targetIssueId, "traQID")
+	if err != nil {
+		return "issueが紐づけられていないか，「traQID」フィールドが存在しませんでした。", err
+	}
+
+	// APIを叩くための変数を設定
+	input := query.UpdateProjectV2ItemFieldValueInput{
+		ItemID:    graphql.ID(traqIDItemId),
+		ProjectID: graphql.ID(projectId),
+		FieldID:   graphql.ID(traqIDFieldId),
+		Value: query.FieldValue{
+			"text": tId,
+		},
+	}
+
+	vars := map[string]interface{}{
+		"input": input,
+	}
+
+	// ミューテーションの実行
+	var mutation query.UpdateProjectV2ItemFieldValue
+	err = client.Mutate(context.Background(), &mutation, vars)
+	if err != nil {
+		return "ミューテーションの実行に失敗しました。", err
+	}
+	return "担当者が正常に設定されました。", nil
+}
+
 func CheckIssueAndField(client *graphql.Client, issuesDict map[int]string, fieldsDict map[string]graphql.ID, targetIssueId int, fieldKey string) (string, graphql.ID, error) {
 	itemId, ok := issuesDict[targetIssueId]
 	fieldId, ok2 := fieldsDict[fieldKey]
