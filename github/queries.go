@@ -3,6 +3,7 @@ package github
 import (
 	"context"
 	"fmt"
+	"log"
 
 	"time"
 
@@ -13,7 +14,7 @@ import (
 
 func UpdateDeadline(client *graphql.Client, date string, targetIssueId int) (string, error) {
 	// APIを叩くための基本情報を取得
-	projectId, issuesDict, fieldsDict, err := cache.LoadOrMakeCache(client)
+	projectId, issuesDict, fieldsDict, fieldsTypeDict, err := cache.LoadOrMakeCache(client)
 	if err != nil {
 		return "キャッシュの読み込みまたは作成に失敗しました。", err
 	}
@@ -25,6 +26,7 @@ func UpdateDeadline(client *graphql.Client, date string, targetIssueId int) (str
 	if err != nil {
 		return "issueが紐づけられていないか，「目標開始日」フィールドが存在しませんでした。", err
 	}
+	log.Println(fieldsTypeDict)
 
 	// APIを叩くための変数を設定
 	jst, err := time.LoadLocation("Asia/Tokyo")
@@ -64,9 +66,9 @@ func UpdateDeadline(client *graphql.Client, date string, targetIssueId int) (str
 	return "期日が正常に設定されました。", nil
 }
 
-func UpdateAssigner(client *graphql.Client, targetIssueId int, tId string) (string, error) {
+func UpdateAssigner(client *graphql.Client, targetIssueId int, tId string, gId string) (string, error) {
 	// APIを叩くための基本情報を取得
-	projectId, issuesDict, fieldsDict, err := cache.LoadOrMakeCache(client)
+	projectId, issuesDict, fieldsDict, fieldsTypeDict, err := cache.LoadOrMakeCache(client)
 	if err != nil {
 		return "キャッシュの読み込みまたは作成に失敗しました。", err
 	}
@@ -74,9 +76,11 @@ func UpdateAssigner(client *graphql.Client, targetIssueId int, tId string) (stri
 	if err != nil {
 		return "issueが紐づけられていないか，「traQID」フィールドが存在しませんでした。", err
 	}
+	log.Println(fieldsTypeDict)
+	log.Println(traqIDItemId)
 
 	// APIを叩くための変数を設定
-	input := query.UpdateProjectV2ItemFieldValueInput{
+	updateInput := query.UpdateProjectV2ItemFieldValueInput{
 		ItemID:    graphql.ID(traqIDItemId),
 		ProjectID: graphql.ID(projectId),
 		FieldID:   graphql.ID(traqIDFieldId),
@@ -84,17 +88,56 @@ func UpdateAssigner(client *graphql.Client, targetIssueId int, tId string) (stri
 			"text": tId,
 		},
 	}
-
-	vars := map[string]interface{}{
-		"input": input,
+	updateVars := map[string]interface{}{
+		"input": updateInput,
 	}
 
-	// ミューテーションの実行
-	var mutation query.UpdateProjectV2ItemFieldValue
-	err = client.Mutate(context.Background(), &mutation, vars)
+	// traQIDフィールドを更新するmutationを実行
+	var updateMutation query.UpdateProjectV2ItemFieldValue
+	err = client.Mutate(context.Background(), &updateMutation, updateVars)
 	if err != nil {
-		return "ミューテーションの実行に失敗しました。", err
+		return "traQIDの更新に失敗しました", err
 	}
+
+	// issue ID の取得
+	var issueQuery query.GetIssueIdFromRepositoryQuery
+	err = client.Query(context.Background(), &issueQuery, map[string]interface{}{
+		"owner":       graphql.String("mathsuky"), //TODO: この辺を環境変数に？
+		"repo":        graphql.String("BOT_remind"),
+		"issueNumber": graphql.Int(targetIssueId),
+	})
+	if err != nil {
+		return "issue ID の取得に失敗しました。", err
+	}
+	issueId := issueQuery.Repository.Issue.Id
+	// ユーザー ID の取得
+	var assigneeQuery query.GetUserIdQuery
+	err = client.Query(context.Background(), &assigneeQuery, map[string]interface{}{
+		"login": graphql.String(gId),
+	})
+	if err != nil {
+		return "ユーザー ID の取得に失敗しました。", err
+	}
+	assigneeId := assigneeQuery.User.Id
+
+	// APIを叩くための変数を設定
+	assignInput := query.AddAssigneesToAssignableInput{
+		AssignableId: graphql.ID(issueId),
+		AssigneeIds:  []graphql.ID{graphql.ID(assigneeId)},
+	}
+	assignVars := map[string]interface{}{
+		"input": assignInput,
+	}
+
+	// Assigneeを追加するmutationを実行
+	var assignMutation query.AddAssigneeToAssignableMutation
+	err = client.Mutate(context.Background(), &assignMutation, assignVars)
+	if err != nil {
+		return "担当者の追加に失敗しました。", err
+	}
+	log.Println(assignMutation.AddAssigneesToAssignable.Assignable.Issue.Title)
+	log.Println("sdf")
+
 	return "担当者が正常に設定されました。", nil
 }
 
@@ -103,7 +146,7 @@ func CheckIssueAndField(client *graphql.Client, issuesDict map[int]string, field
 	fieldId, ok2 := fieldsDict[fieldKey]
 	if !ok || !ok2 {
 		// キャッシュを再作成
-		_, issuesDict, fieldsDict, err := cache.MakeCache(client)
+		_, issuesDict, fieldsDict, _, err := cache.MakeCache(client)
 		if err != nil {
 			return "", "", fmt.Errorf("failed to make cache: %v", err)
 		}

@@ -34,6 +34,35 @@ type UpdateRelatedIssueDeadlineMutation struct {
 	} `graphql:"updateStart:updateProjectV2ItemFieldValue(input: $input2)"`
 }
 
+type AddAssigneesToAssignableInput struct {
+	AssignableId graphql.ID   `json:"assignableId"`
+	AssigneeIds  []graphql.ID `json:"assigneeIds"`
+}
+
+type AddAssigneeToAssignableMutation struct {
+	AddAssigneesToAssignable struct {
+		Assignable struct {
+			Issue struct {
+				Title string
+			} `graphql:"... on Issue"`
+		} `graphql:"assignable"`
+	} `graphql:"addAssigneesToAssignable(input: $input)"`
+}
+
+type GetIssueIdFromRepositoryQuery struct {
+	Repository struct {
+		Issue struct {
+			Id string
+		} `graphql:"issue(number: $issueNumber)"`
+	} `graphql:"repository(owner: $owner, name: $repo)"`
+}
+
+type GetUserIdQuery struct {
+	User struct {
+		Id string
+	} `graphql:"user(login: $login)"`
+}
+
 type GetProjectBaseInfoQuery struct {
 	User struct {
 		ProjectV2 struct {
