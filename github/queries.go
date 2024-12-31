@@ -14,7 +14,7 @@ import (
 
 func UpdateDeadline(client *graphql.Client, date string, targetIssueId int) (string, error) {
 	// APIを叩くための基本情報を取得
-	projectId, issuesDict, fieldsDict, fieldsTypeDict, err := cache.LoadOrMakeCache(client)
+	projectId, issuesDict, fieldsDict, err := cache.LoadOrMakeCache(client)
 	if err != nil {
 		return "キャッシュの読み込みまたは作成に失敗しました。", err
 	}
@@ -26,7 +26,6 @@ func UpdateDeadline(client *graphql.Client, date string, targetIssueId int) (str
 	if err != nil {
 		return "issueが紐づけられていないか，「目標開始日」フィールドが存在しませんでした。", err
 	}
-	log.Println(fieldsTypeDict)
 
 	// APIを叩くための変数を設定
 	jst, err := time.LoadLocation("Asia/Tokyo")
@@ -68,7 +67,7 @@ func UpdateDeadline(client *graphql.Client, date string, targetIssueId int) (str
 
 func UpdateAssigner(client *graphql.Client, targetIssueId int, tId string, gId string) (string, error) {
 	// APIを叩くための基本情報を取得
-	projectId, issuesDict, fieldsDict, fieldsTypeDict, err := cache.LoadOrMakeCache(client)
+	projectId, issuesDict, fieldsDict, err := cache.LoadOrMakeCache(client)
 	if err != nil {
 		return "キャッシュの読み込みまたは作成に失敗しました。", err
 	}
@@ -76,7 +75,6 @@ func UpdateAssigner(client *graphql.Client, targetIssueId int, tId string, gId s
 	if err != nil {
 		return "issueが紐づけられていないか，「traQID」フィールドが存在しませんでした。", err
 	}
-	log.Println(fieldsTypeDict)
 	log.Println(traqIDItemId)
 
 	// APIを叩くための変数を設定
@@ -146,7 +144,7 @@ func CheckIssueAndField(client *graphql.Client, issuesDict map[int]string, field
 	fieldId, ok2 := fieldsDict[fieldKey]
 	if !ok || !ok2 {
 		// キャッシュを再作成
-		_, issuesDict, fieldsDict, _, err := cache.MakeCache(client)
+		_, issuesDict, fieldsDict, err := cache.MakeCache(client)
 		if err != nil {
 			return "", "", fmt.Errorf("failed to make cache: %v", err)
 		}
