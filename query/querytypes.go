@@ -91,7 +91,7 @@ type GetProjectBaseInfoQuery struct {
 							Id   string
 							Name string
 						} `graphql:"ProjectV2SingleSelectFieldOption`
-					} `graphql:"... on ProjectV2SingleSelectField"` // これがいるかわからない
+					} `graphql:"... on ProjectV2SingleSelectField"`
 				}
 			} `graphql:"fields(first: 100)"`
 		} `graphql:"projectV2(number: $projectNumber)"`

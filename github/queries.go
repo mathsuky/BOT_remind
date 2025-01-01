@@ -14,15 +14,15 @@ import (
 
 func UpdateDeadline(client *graphql.Client, date string, targetIssueId int) (string, error) {
 	// APIを叩くための基本情報を取得
-	projectId, issuesDict, fieldsDict, err := cache.LoadOrMakeCache(client)
+	projectId, issuesDict, fieldsDict, _, err := cache.LoadOrMakeCache(client)
 	if err != nil {
 		return "キャッシュの読み込みまたは作成に失敗しました。", err
 	}
-	goalItemId, goalFieldId, err := CheckIssueAndField(client, issuesDict, fieldsDict, targetIssueId, "目標")
+	goalItemId, goalFieldId, err := GetItemAndFieldId(client, issuesDict, fieldsDict, targetIssueId, "目標")
 	if err != nil {
 		return "issueが紐づけられていないか，「目標」フィールドが存在しませんでした。", err
 	}
-	startItemId, startFieldId, err := CheckIssueAndField(client, issuesDict, fieldsDict, targetIssueId, "目標開始日")
+	startItemId, startFieldId, err := GetItemAndFieldId(client, issuesDict, fieldsDict, targetIssueId, "目標開始日")
 	if err != nil {
 		return "issueが紐づけられていないか，「目標開始日」フィールドが存在しませんでした。", err
 	}
@@ -65,21 +65,21 @@ func UpdateDeadline(client *graphql.Client, date string, targetIssueId int) (str
 	return "期日が正常に設定されました。", nil
 }
 
-func UpdateAssigner(client *graphql.Client, targetIssueId int, tId string, gId string) (string, error) {
+func UpdateAssigner(client *graphql.Client, targetIssueNum int, tId string, gId string) (string, error) {
 	// APIを叩くための基本情報を取得
-	projectId, issuesDict, fieldsDict, err := cache.LoadOrMakeCache(client)
+	projectId, issuesDict, fieldsDict, statusOptionsDict, err := cache.LoadOrMakeCache(client)
 	if err != nil {
 		return "キャッシュの読み込みまたは作成に失敗しました。", err
 	}
-	traqIDItemId, traqIDFieldId, err := CheckIssueAndField(client, issuesDict, fieldsDict, targetIssueId, "traQID")
+	itemId, traqIDFieldId, err := GetItemAndFieldId(client, issuesDict, fieldsDict, targetIssueNum, "traQID")
 	if err != nil {
 		return "issueが紐づけられていないか，「traQID」フィールドが存在しませんでした。", err
 	}
-	log.Println(traqIDItemId)
+	log.Println(itemId)
 
 	// APIを叩くための変数を設定
 	updateInput := query.UpdateProjectV2ItemFieldValueInput{
-		ItemID:    graphql.ID(traqIDItemId),
+		ItemID:    graphql.ID(itemId),
 		ProjectID: graphql.ID(projectId),
 		FieldID:   graphql.ID(traqIDFieldId),
 		Value: query.FieldValue{
@@ -102,7 +102,7 @@ func UpdateAssigner(client *graphql.Client, targetIssueId int, tId string, gId s
 	err = client.Query(context.Background(), &issueQuery, map[string]interface{}{
 		"owner":       graphql.String("mathsuky"), //TODO: この辺を環境変数に？
 		"repo":        graphql.String("BOT_remind"),
-		"issueNumber": graphql.Int(targetIssueId),
+		"issueNumber": graphql.Int(targetIssueNum),
 	})
 	if err != nil {
 		return "issue ID の取得に失敗しました。", err
@@ -136,19 +136,41 @@ func UpdateAssigner(client *graphql.Client, targetIssueId int, tId string, gId s
 	log.Println(assignMutation.AddAssigneesToAssignable.Assignable.Issue.Title)
 	log.Println("sdf")
 
+	var statusQuery query.UpdateProjectV2ItemFieldValue
+	_, statusFieldId, err := GetItemAndFieldId(client, issuesDict, fieldsDict, targetIssueNum, "Status")
+	progressId := statusOptionsDict["In Progress"]
+	if err != nil {
+		return "issueが紐づけられていないか，「ステータス」フィールドが存在しませんでした。", err
+	}
+	input3 := query.UpdateProjectV2ItemFieldValueInput{
+		ItemID:    graphql.ID(itemId),
+		ProjectID: graphql.ID(projectId),
+		FieldID:   graphql.ID(statusFieldId),
+		Value: query.FieldValue{
+			"singleSelectOptionId": progressId,
+		},
+	}
+	vars := map[string]interface{}{
+		"input": input3,
+	}
+	err = client.Mutate(context.Background(), &statusQuery, vars)
+	if err != nil {
+		return "ステータスの更新に失敗しました。", err
+	}
+
 	return "担当者が正常に設定されました。", nil
 }
 
-func CheckIssueAndField(client *graphql.Client, issuesDict map[int]string, fieldsDict map[string]graphql.ID, targetIssueId int, fieldKey string) (string, graphql.ID, error) {
-	itemId, ok := issuesDict[targetIssueId]
+func GetItemAndFieldId(client *graphql.Client, issuesDict map[int]string, fieldsDict map[string]graphql.ID, targetIssueNum int, fieldKey string) (string, graphql.ID, error) {
+	itemId, ok := issuesDict[targetIssueNum]
 	fieldId, ok2 := fieldsDict[fieldKey]
 	if !ok || !ok2 {
 		// キャッシュを再作成
-		_, issuesDict, fieldsDict, err := cache.MakeCache(client)
+		_, issuesDict, fieldsDict, _, err := cache.MakeCache(client)
 		if err != nil {
 			return "", "", fmt.Errorf("failed to make cache: %v", err)
 		}
-		itemId, ok = issuesDict[targetIssueId]
+		itemId, ok = issuesDict[targetIssueNum]
 		fieldId, ok2 = fieldsDict[fieldKey]
 		if !ok || !ok2 {
 			return "", "", fmt.Errorf("issue or field not found")

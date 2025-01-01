@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"log"
 	"os"
 
 	"github.com/hasura/go-graphql-client"
@@ -13,9 +14,10 @@ import (
 const cacheFilePath = "cache.json"
 
 type CacheData struct {
-	ID         string
-	IssuesDict map[int]string
-	FieldsDict map[string]graphql.ID
+	ID                string
+	IssuesDict        map[int]string
+	FieldsDict        map[string]graphql.ID
+	StatusOptionsDict map[string]graphql.ID
 }
 
 func LoadCache() (CacheData, error) {
@@ -33,11 +35,12 @@ func LoadCache() (CacheData, error) {
 	return cache, nil
 }
 
-func SaveCache(id string, dic1 map[int]string, dic2 map[string]graphql.ID) error {
+func SaveCache(id string, dic1 map[int]string, dic2 map[string]graphql.ID, dic3 map[string]graphql.ID) error {
 	cacheData := CacheData{
-		ID:         id,
-		IssuesDict: dic1,
-		FieldsDict: dic2,
+		ID:                id,
+		IssuesDict:        dic1,
+		FieldsDict:        dic2,
+		StatusOptionsDict: dic3,
 	}
 
 	os.Remove(cacheFilePath)
@@ -55,7 +58,7 @@ func SaveCache(id string, dic1 map[int]string, dic2 map[string]graphql.ID) error
 	return nil
 }
 
-func MakeCache(client *graphql.Client) (string, map[int]string, map[string]graphql.ID, error) {
+func MakeCache(client *graphql.Client) (string, map[int]string, map[string]graphql.ID, map[string]graphql.ID, error) {
 	var info query.GetProjectBaseInfoQuery
 	// キャッシュがない場合はクエリを実行してキャッシュを保存
 	err := client.Query(context.Background(), &info, map[string]interface{}{
@@ -63,8 +66,9 @@ func MakeCache(client *graphql.Client) (string, map[int]string, map[string]graph
 		"user":          graphql.String("mathsuky"),
 	})
 	if err != nil {
-		return "", nil, nil, err
+		return "", nil, nil, nil, err
 	}
+	// log.Println(info.User.ProjectV2.Fields.Nodes)
 
 	projectId := info.User.ProjectV2.Id
 	issuesDict := make(map[int]string)
@@ -75,23 +79,32 @@ func MakeCache(client *graphql.Client) (string, map[int]string, map[string]graph
 	for _, field := range info.User.ProjectV2.Fields.Nodes {
 		fieldsDict[field.ProjectV2Field.Name] = graphql.ID(field.ProjectV2Field.Id)
 	}
+	statusOptionsDict := make(map[string]graphql.ID)
+	for _, field := range info.User.ProjectV2.Fields.Nodes {
+		log.Println(field.ProjectV2SingleSelectField.Options, field.ProjectV2Field.Name)
+		if field.ProjectV2Field.Name == "Status" {
+			for _, option := range field.ProjectV2SingleSelectField.Options {
+				statusOptionsDict[option.Name] = graphql.ID(option.Id)
+			}
+		}
+	}
 
-	return projectId, issuesDict, fieldsDict, nil
+	return projectId, issuesDict, fieldsDict, statusOptionsDict, nil
 }
 
-func LoadOrMakeCache(client *graphql.Client) (string, map[int]string, map[string]graphql.ID, error) {
+func LoadOrMakeCache(client *graphql.Client) (string, map[int]string, map[string]graphql.ID, map[string]graphql.ID, error) {
 	baseInfo, err := LoadCache()
 	if err == nil {
-		return baseInfo.ID, baseInfo.IssuesDict, baseInfo.FieldsDict, nil
+		return baseInfo.ID, baseInfo.IssuesDict, baseInfo.FieldsDict, baseInfo.StatusOptionsDict, nil
 	}
 
-	projectId, issuesDict, fieldsDict, err := MakeCache(client)
+	projectId, issuesDict, fieldsDict, statusOptionsDict, err := MakeCache(client)
 	if err != nil {
-		return "", nil, nil, fmt.Errorf("failed to make cache: %v", err)
+		return "", nil, nil, nil, fmt.Errorf("failed to make cache: %v", err)
 	}
-	err = SaveCache(projectId, issuesDict, fieldsDict)
+	err = SaveCache(projectId, issuesDict, fieldsDict, statusOptionsDict)
 	if err != nil {
-		return "", nil, nil, fmt.Errorf("failed to save cache: %v", err)
+		return "", nil, nil, nil, fmt.Errorf("failed to save cache: %v", err)
 	}
-	return projectId, issuesDict, fieldsDict, nil
+	return projectId, issuesDict, fieldsDict, statusOptionsDict, nil
 }
