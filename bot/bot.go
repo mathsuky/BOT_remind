@@ -3,6 +3,7 @@ package bot
 import (
 	"context"
 	"log"
+	"os"
 
 	"github.com/hasura/go-graphql-client"
 	"github.com/traPtitech/go-traq"
@@ -31,6 +32,9 @@ func Start(client *graphql.Client, accessToken string) error {
 			log.Println(err)
 		}
 	})
+
+	// 毎日特定の時間にメッセージを送信するスケジューリング
+	go ScheduleDailyMessage(client, bot, os.Getenv("TARGET_CHANNEL_ID"), 22, 49)
 
 	// Bot の起動
 	return bot.Start()

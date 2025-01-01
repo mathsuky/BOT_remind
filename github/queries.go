@@ -65,25 +65,25 @@ func UpdateDeadline(client *graphql.Client, date string, targetIssueId int) (str
 	return "期日が正常に設定されました。", nil
 }
 
-func UpdateAssigner(client *graphql.Client, targetIssueNum int, tId string, gId string) (string, error) {
+func UpdateAssigner(client *graphql.Client, targetIssueNum int, traqID string, githubLogin string) (string, error) {
 	// APIを叩くための基本情報を取得
-	projectId, issuesDict, fieldsDict, statusOptionsDict, err := cache.LoadOrMakeCache(client)
+	projectID, issuesDict, fieldsDict, statusOptionsDict, err := cache.LoadOrMakeCache(client)
 	if err != nil {
 		return "キャッシュの読み込みまたは作成に失敗しました。", err
 	}
-	itemId, traqIDFieldId, err := GetItemAndFieldId(client, issuesDict, fieldsDict, targetIssueNum, "traQID")
+	itemID, traqIDFieldID, err := GetItemAndFieldId(client, issuesDict, fieldsDict, targetIssueNum, "traQID")
 	if err != nil {
 		return "issueが紐づけられていないか，「traQID」フィールドが存在しませんでした。", err
 	}
-	log.Println(itemId)
+	log.Println(itemID)
 
 	// APIを叩くための変数を設定
 	updateInput := query.UpdateProjectV2ItemFieldValueInput{
-		ItemID:    graphql.ID(itemId),
-		ProjectID: graphql.ID(projectId),
-		FieldID:   graphql.ID(traqIDFieldId),
+		ItemID:    graphql.ID(itemID),
+		ProjectID: graphql.ID(projectID),
+		FieldID:   graphql.ID(traqIDFieldID),
 		Value: query.FieldValue{
-			"text": tId,
+			"text": traqID,
 		},
 	}
 	updateVars := map[string]interface{}{
@@ -107,21 +107,22 @@ func UpdateAssigner(client *graphql.Client, targetIssueNum int, tId string, gId 
 	if err != nil {
 		return "issue ID の取得に失敗しました。", err
 	}
-	issueId := issueQuery.Repository.Issue.Id
+	issueID := issueQuery.Repository.Issue.Id
+
 	// ユーザー ID の取得
 	var assigneeQuery query.GetUserIdQuery
 	err = client.Query(context.Background(), &assigneeQuery, map[string]interface{}{
-		"login": graphql.String(gId),
+		"login": graphql.String(githubLogin),
 	})
 	if err != nil {
 		return "ユーザー ID の取得に失敗しました。", err
 	}
-	assigneeId := assigneeQuery.User.Id
+	assigneeID := assigneeQuery.User.Id
 
 	// APIを叩くための変数を設定
 	assignInput := query.AddAssigneesToAssignableInput{
-		AssignableId: graphql.ID(issueId),
-		AssigneeIds:  []graphql.ID{graphql.ID(assigneeId)},
+		AssignableId: graphql.ID(issueID),
+		AssigneeIds:  []graphql.ID{graphql.ID(assigneeID)},
 	}
 	assignVars := map[string]interface{}{
 		"input": assignInput,
@@ -137,28 +138,64 @@ func UpdateAssigner(client *graphql.Client, targetIssueNum int, tId string, gId 
 	log.Println("sdf")
 
 	var statusQuery query.UpdateProjectV2ItemFieldValue
-	_, statusFieldId, err := GetItemAndFieldId(client, issuesDict, fieldsDict, targetIssueNum, "Status")
-	progressId := statusOptionsDict["In Progress"]
+	_, statusFieldID, err := GetItemAndFieldId(client, issuesDict, fieldsDict, targetIssueNum, "Status")
+	progressID := statusOptionsDict["In Progress"]
 	if err != nil {
 		return "issueが紐づけられていないか，「ステータス」フィールドが存在しませんでした。", err
 	}
-	input3 := query.UpdateProjectV2ItemFieldValueInput{
-		ItemID:    graphql.ID(itemId),
-		ProjectID: graphql.ID(projectId),
-		FieldID:   graphql.ID(statusFieldId),
+	statusUpdateInput := query.UpdateProjectV2ItemFieldValueInput{
+		ItemID:    graphql.ID(itemID),
+		ProjectID: graphql.ID(projectID),
+		FieldID:   graphql.ID(statusFieldID),
 		Value: query.FieldValue{
-			"singleSelectOptionId": progressId,
+			"singleSelectOptionId": progressID,
 		},
 	}
-	vars := map[string]interface{}{
-		"input": input3,
+	statusUpdateVars := map[string]interface{}{
+		"input": statusUpdateInput,
 	}
-	err = client.Mutate(context.Background(), &statusQuery, vars)
+	err = client.Mutate(context.Background(), &statusQuery, statusUpdateVars)
 	if err != nil {
 		return "ステータスの更新に失敗しました。", err
 	}
 
 	return "担当者が正常に設定されました。", nil
+}
+
+// TODO:IssueDetailの定義を書く場所を考える
+func Remind(client *graphql.Client) ([]query.IssueDetail, error) {
+	var tmpQuery query.GetIssueFieldsQuery
+	err := client.Query(context.Background(), &tmpQuery, map[string]interface{}{
+		"projectNumber": graphql.Int(3), // TODO: この辺を環境変数に？
+		"user":          graphql.String("mathsuky"),
+	})
+	if err != nil {
+		return nil, fmt.Errorf("failed to get issue fields: %v", err)
+	}
+	log.Println(tmpQuery.User.ProjectV2.Items.Nodes)
+	var issues []query.IssueDetail
+	for _, item := range tmpQuery.User.ProjectV2.Items.Nodes {
+		// TODO: エラーハンドリングをももうちょいよくして
+		if item.Deadline.ProjectV2ItemFieldDateValue.Date == "" {
+			continue
+		}
+		deadline, err := time.Parse("2006-01-02", item.Deadline.ProjectV2ItemFieldDateValue.Date)
+		if err != nil {
+			return nil, fmt.Errorf("failed to parse deadline: %v", err)
+		}
+		status := item.Status.ProjectV2ItemFieldSingleSelectValue.Name
+		// 日付の差分がマイナス，0，1，3，7の場合にリマインド
+		if status != "In Progress" {
+			continue
+		}
+		daysUntilDeadline := int(time.Until(deadline).Hours() / 24)
+		// TODO: この辺の条件式をもうちょいよくする
+		if daysUntilDeadline == 0 || daysUntilDeadline == 1 || daysUntilDeadline == 3 || daysUntilDeadline == 7 || daysUntilDeadline < 0 {
+			issues = append(issues, query.IssueDetail{IssueNum: item.Content.Issue.Number, Assignee: item.TraqID.ProjectV2ItemFieldTextValue.Text, Deadline: deadline, Status: status})
+		}
+	}
+	log.Println(issues)
+	return issues, nil
 }
 
 func GetItemAndFieldId(client *graphql.Client, issuesDict map[int]string, fieldsDict map[string]graphql.ID, targetIssueNum int, fieldKey string) (string, graphql.ID, error) {

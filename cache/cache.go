@@ -68,7 +68,7 @@ func MakeCache(client *graphql.Client) (string, map[int]string, map[string]graph
 	if err != nil {
 		return "", nil, nil, nil, err
 	}
-	// log.Println(info.User.ProjectV2.Fields.Nodes)
+	log.Println(info.User.ProjectV2.Items.Nodes)
 
 	projectId := info.User.ProjectV2.Id
 	issuesDict := make(map[int]string)

@@ -1,6 +1,8 @@
 package query
 
 import (
+	"time"
+
 	"github.com/hasura/go-graphql-client"
 )
 
@@ -98,7 +100,45 @@ type GetProjectBaseInfoQuery struct {
 	} `graphql:"user(login: $user)"`
 }
 
+type GetIssueFieldsQuery struct {
+	User struct {
+		ProjectV2 struct {
+			Items struct {
+				Nodes []struct {
+					Content struct {
+						Issue struct {
+							Number int
+						} `graphql:"... on Issue"`
+					}
+					Deadline struct {
+						ProjectV2ItemFieldDateValue struct {
+							Date string
+						} `graphql:"... on ProjectV2ItemFieldDateValue"`
+					} `graphql:"Deadline: fieldValueByName(name: \"目標\")"`
+					Status struct {
+						ProjectV2ItemFieldSingleSelectValue struct {
+							Name string
+						} `graphql:"... on ProjectV2ItemFieldSingleSelectValue"`
+					} `graphql:"status: fieldValueByName(name: \"Status\")"`
+					TraqID struct {
+						ProjectV2ItemFieldTextValue struct {
+							Text string
+						} `graphql:"... on ProjectV2ItemFieldTextValue"`
+					} `graphql:"traQID: fieldValueByName(name: \"traQID\")"`
+				}
+			} `graphql:"items(first: 100)"`
+		} `graphql:"projectV2(number: $projectNumber)"`
+	} `graphql:"user(login: $user)"`
+}
+
 type ProjectV2SingleSelectFieldOption struct {
 	Id   string `graphql:"id"`
 	Name string `graphql:"name"`
+}
+
+type IssueDetail struct {
+	IssueNum int
+	Assignee string
+	Deadline time.Time
+	Status   string
 }
