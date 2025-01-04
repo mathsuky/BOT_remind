@@ -4,6 +4,8 @@ import (
 	"context"
 	"fmt"
 	"log"
+	"os"
+	"strconv"
 
 	"time"
 
@@ -100,8 +102,8 @@ func UpdateAssigner(client *graphql.Client, targetIssueNum int, traqID string, g
 	// issue ID の取得
 	var issueQuery query.GetIssueIdFromRepositoryQuery
 	err = client.Query(context.Background(), &issueQuery, map[string]interface{}{
-		"owner":       graphql.String("mathsuky"), //TODO: この辺を環境変数に？
-		"repo":        graphql.String("BOT_remind"),
+		"owner":       graphql.String(os.Getenv("REPOSITORY_OWNER")),
+		"repo":        graphql.String(os.Getenv("REPOSITORY_NAME")),
 		"issueNumber": graphql.Int(targetIssueNum),
 	})
 	if err != nil {
@@ -164,10 +166,14 @@ func UpdateAssigner(client *graphql.Client, targetIssueNum int, traqID string, g
 
 // TODO:IssueDetailの定義を書く場所を考える
 func Remind(client *graphql.Client) ([]query.IssueDetail, error) {
+	projectNumber, err := strconv.Atoi(os.Getenv("PROJECTV2_NUMBER"))
+	if err != nil {
+		return nil, fmt.Errorf("failed to convert PROJECTV2_NUMBER to int: %v", err)
+	}
 	var tmpQuery query.GetIssueFieldsQuery
-	err := client.Query(context.Background(), &tmpQuery, map[string]interface{}{
-		"projectNumber": graphql.Int(3), // TODO: この辺を環境変数に？
-		"user":          graphql.String("mathsuky"),
+	err = client.Query(context.Background(), &tmpQuery, map[string]interface{}{
+		"projectNumber": graphql.Int(projectNumber),
+		"user":          graphql.String(os.Getenv("REPOSITORY_OWNER")),
 	})
 	if err != nil {
 		return nil, fmt.Errorf("failed to get issue fields: %v", err)

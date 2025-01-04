@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"log"
 	"os"
+	"strconv"
 
 	"github.com/hasura/go-graphql-client"
 	"github.com/mathsuky/BOT_remind/query"
@@ -59,11 +60,15 @@ func SaveCache(id string, dic1 map[int]string, dic2 map[string]graphql.ID, dic3 
 }
 
 func MakeCache(client *graphql.Client) (string, map[int]string, map[string]graphql.ID, map[string]graphql.ID, error) {
+	projectNumber, err := strconv.Atoi(os.Getenv("PROJECTV2_NUMBER"))
+	if err != nil {
+		return "", nil, nil, nil, fmt.Errorf("failed to convert PROJECTV2_NUMBER to int: %v", err)
+	}
 	var info query.GetProjectBaseInfoQuery
 	// キャッシュがない場合はクエリを実行してキャッシュを保存
-	err := client.Query(context.Background(), &info, map[string]interface{}{
-		"projectNumber": graphql.Int(3),
-		"user":          graphql.String("mathsuky"),
+	err = client.Query(context.Background(), &info, map[string]interface{}{
+		"projectNumber": graphql.Int(projectNumber),
+		"user":          graphql.String(os.Getenv("REPOSITORY_OWNER")),
 	})
 	if err != nil {
 		return "", nil, nil, nil, err
