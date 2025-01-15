@@ -105,3 +105,16 @@ gh api graphql -F input='{
     "date": "2025-01-01"
   }
 }' -f query='mutation ($input: UpdateProjectV2ItemFieldValueInput!) { updateProjectV2ItemFieldValue(input: $input) { clientMutationId } }
+
+
+gh api graphql -f query='
+  query($org: String!, $projectNumber: Int!) {
+    organization(login: $org) {
+      projectV2(number: $projectNumber) {
+        title
+        url
+        id
+      }
+    }
+  }
+' -f org='traP-jp' -F projectNumber=3
