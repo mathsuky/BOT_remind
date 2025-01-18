@@ -9,13 +9,11 @@ import (
 	"github.com/mathsuky/BOT_remind/github"
 )
 
-
-
 func main() {
 	err := godotenv.Load()
-	// if err != nil {
-	// 	log.Fatalf("error loading .env file")
-	// }
+	if err != nil {
+		log.Printf("failed to load .env file: %v", err)
+	}
 
 	client, err := github.GetClient(os.Getenv("GITHUB_TOKEN_CLASSIC"))
 	if err != nil {
