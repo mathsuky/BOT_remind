@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"log"
 	"os"
+	"path/filepath"
 	"strconv"
 	"time"
 
@@ -13,7 +14,27 @@ import (
 	"github.com/mathsuky/BOT_remind/query"
 )
 
-const cacheFilePath = "cache.json"
+var cacheFilePath string
+
+func init() {
+	// キャッシュディレクトリの設定
+	// 1. CACHE_DIR環境変数
+	// 2. /tmp/bot-remind（デフォルト）
+	cacheDir := os.Getenv("CACHE_DIR")
+	if cacheDir == "" {
+		cacheDir = filepath.Join(os.TempDir(), "bot-remind")
+	}
+
+	// キャッシュディレクトリの作成（0755パーミッション）
+	if err := os.MkdirAll(cacheDir, 0755); err != nil {
+		log.Printf("Warning: Failed to create cache directory: %v", err)
+		// フォールバック: 一時ディレクトリ直下
+		cacheDir = os.TempDir()
+	}
+
+	cacheFilePath = filepath.Join(cacheDir, "github_project.json")
+	log.Printf("Using cache file: %s", cacheFilePath)
+}
 
 type CacheData struct {
 	ID                string
@@ -70,6 +91,7 @@ func SaveCache(id string, dic1 map[int]string, dic2 map[string]graphql.ID, dic3 
 		return err
 	}
 
+	// 0644パーミッションでファイルを作成
 	err = os.WriteFile(cacheFilePath, data, 0644)
 	if err != nil {
 		log.Printf("Failed to write cache file: %v", err)
