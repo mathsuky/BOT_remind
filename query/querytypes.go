@@ -65,20 +65,10 @@ type GetUserIdQuery struct {
 	} `graphql:"user(login: $login)"`
 }
 
-type GetProjectBaseInfoQuery struct {
+type GetUserProjectBaseInfoQuery struct {
 	User struct {
 		ProjectV2 struct {
-			Id    string
-			Items struct {
-				Nodes []struct {
-					Id      string
-					Content struct {
-						Issue struct {
-							Number int
-						} `graphql:"... on Issue"`
-					}
-				}
-			} `graphql:"items(first: 100)"`
+			Id     string
 			Fields struct {
 				Nodes []struct {
 					ProjectV2Field struct {
@@ -96,6 +86,27 @@ type GetProjectBaseInfoQuery struct {
 					} `graphql:"... on ProjectV2SingleSelectField"`
 				}
 			} `graphql:"fields(first: 100)"`
+		} `graphql:"projectV2(number: $projectNumber)"`
+	} `graphql:"user(login: $user)"`
+}
+
+type GetUserProjectItemsQuery struct {
+	User struct {
+		ProjectV2 struct {
+			Items struct {
+				Nodes []struct {
+					Id      string
+					Content struct {
+						Issue struct {
+							Number int
+						} `graphql:"... on Issue"`
+					}
+				}
+				PageInfo struct {
+					HasNextPage bool
+					EndCursor   string
+				}
+			} `graphql:"items(first: $first, after: $after)"`
 		} `graphql:"projectV2(number: $projectNumber)"`
 	} `graphql:"user(login: $user)"`
 }

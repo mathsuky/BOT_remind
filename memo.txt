@@ -55,7 +55,7 @@ type ProjectIssuesQuery struct {
 	} `graphql:"user(login: $user)"`
 }
 
-type GetProjectBaseInfoQuery struct {
+type GetUserProjectBaseInfoQuery struct {
 	User struct {
 		ProjectV2 struct {
 			Id    string
@@ -118,3 +118,44 @@ gh api graphql -f query='
     }
   }
 ' -f org='traP-jp' -F projectNumber=3
+
+gh api graphql -f query='
+query {
+  user(login: "mathsuky") {
+    projectV2(number: 3) {
+      id
+      items(first: 2 after: "Mg") {
+        nodes {
+          id
+          content {
+            ... on Issue {
+              number
+            }
+          }
+        }
+		pageInfo {
+          endCursor
+          hasNextPage
+        }
+      }
+      fields(first: 100) {
+        nodes {
+          ... on ProjectV2Field {
+            id
+            name
+            dataType
+          }
+          ... on ProjectV2SingleSelectField {
+            id
+            name
+            options {
+              id
+              name
+            }
+          }
+        }
+      }
+    }
+  }
+}
+'
