@@ -21,6 +21,13 @@
 go.work
 go.work.sum
 
-# env file
+# Environment variables and secrets
 .env
 *.pem
+.env.*
+!.env.example
+
+# Cache files
+.cache/
+**/cache/*.json
+cache.json

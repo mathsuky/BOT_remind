@@ -6,8 +6,6 @@ import (
 	"fmt"
 	"log"
 	"os"
-	"path/filepath"
-	"runtime"
 	"strconv"
 	"time"
 
@@ -15,49 +13,7 @@ import (
 	"github.com/mathsuky/BOT_remind/query"
 )
 
-var cacheFilePath string
-
-func init() {
-	// キャッシュディレクトリの優先順位:
-	// 1. CACHE_DIR 環境変数
-	// 2. XDG_CACHE_HOME 環境変数 (Linux/BSD)
-	// 3. デフォルトのプラットフォーム固有のキャッシュディレクトリ
-
-	var cacheDir string
-	if envCacheDir := os.Getenv("CACHE_DIR"); envCacheDir != "" {
-		cacheDir = envCacheDir
-	} else if xdgCacheHome := os.Getenv("XDG_CACHE_HOME"); xdgCacheHome != "" {
-		cacheDir = filepath.Join(xdgCacheHome, "bot-remind")
-	} else {
-		homeDir, err := os.UserHomeDir()
-		if err != nil {
-			log.Fatal("Failed to get home directory:", err)
-		}
-
-		// プラットフォーム固有のデフォルトキャッシュディレクトリ
-		switch runtime.GOOS {
-		case "darwin":
-			cacheDir = filepath.Join(homeDir, "Library", "Caches", "BOT_remind")
-		case "windows":
-			cacheDir = filepath.Join(homeDir, "AppData", "Local", "BOT_remind", "Cache")
-		default: // Linux/BSD
-			cacheDir = filepath.Join(homeDir, ".cache", "bot-remind")
-		}
-	}
-
-	// キャッシュディレクトリの作成
-	if err := os.MkdirAll(cacheDir, 0755); err != nil {
-		log.Printf("Warning: Failed to create cache directory: %v", err)
-		// フォールバック: カレントディレクトリの.cacheを使用
-		cacheDir = ".cache"
-		if err := os.MkdirAll(cacheDir, 0755); err != nil {
-			log.Fatal("Failed to create fallback cache directory:", err)
-		}
-	}
-
-	cacheFilePath = filepath.Join(cacheDir, "github_project.json")
-	log.Printf("Using cache file: %s", cacheFilePath)
-}
+const cacheFilePath = "cache.json"
 
 type CacheData struct {
 	ID                string
