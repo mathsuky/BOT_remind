@@ -7,6 +7,7 @@ import (
 	"log"
 	"os"
 	"path/filepath"
+	"runtime"
 	"strconv"
 	"time"
 
@@ -17,18 +18,45 @@ import (
 var cacheFilePath string
 
 func init() {
-	homeDir, err := os.UserHomeDir()
-	if err != nil {
-		log.Fatal("Failed to get home directory:", err)
+	// キャッシュディレクトリの優先順位:
+	// 1. CACHE_DIR 環境変数
+	// 2. XDG_CACHE_HOME 環境変数 (Linux/BSD)
+	// 3. デフォルトのプラットフォーム固有のキャッシュディレクトリ
+
+	var cacheDir string
+	if envCacheDir := os.Getenv("CACHE_DIR"); envCacheDir != "" {
+		cacheDir = envCacheDir
+	} else if xdgCacheHome := os.Getenv("XDG_CACHE_HOME"); xdgCacheHome != "" {
+		cacheDir = filepath.Join(xdgCacheHome, "bot-remind")
+	} else {
+		homeDir, err := os.UserHomeDir()
+		if err != nil {
+			log.Fatal("Failed to get home directory:", err)
+		}
+
+		// プラットフォーム固有のデフォルトキャッシュディレクトリ
+		switch runtime.GOOS {
+		case "darwin":
+			cacheDir = filepath.Join(homeDir, "Library", "Caches", "BOT_remind")
+		case "windows":
+			cacheDir = filepath.Join(homeDir, "AppData", "Local", "BOT_remind", "Cache")
+		default: // Linux/BSD
+			cacheDir = filepath.Join(homeDir, ".cache", "bot-remind")
+		}
 	}
 
-	// ~/Library/Application Support/BOT_remind/cache ディレクトリを作成
-	cacheDir := filepath.Join(homeDir, "Library", "Application Support", "BOT_remind", "cache")
+	// キャッシュディレクトリの作成
 	if err := os.MkdirAll(cacheDir, 0755); err != nil {
-		log.Fatal("Failed to create cache directory:", err)
+		log.Printf("Warning: Failed to create cache directory: %v", err)
+		// フォールバック: カレントディレクトリの.cacheを使用
+		cacheDir = ".cache"
+		if err := os.MkdirAll(cacheDir, 0755); err != nil {
+			log.Fatal("Failed to create fallback cache directory:", err)
+		}
 	}
 
 	cacheFilePath = filepath.Join(cacheDir, "github_project.json")
+	log.Printf("Using cache file: %s", cacheFilePath)
 }
 
 type CacheData struct {
@@ -41,7 +69,6 @@ type CacheData struct {
 
 // キャッシュの有効期間（24時間）
 const cacheTTL = 24 * time.Hour
-
 
 func LoadCache() (CacheData, error) {
 	data, err := os.ReadFile(cacheFilePath)
@@ -140,9 +167,9 @@ func MakeCache(client *graphql.Client) (string, map[int]string, map[string]graph
 		log.Printf("Fetching issues page (size: %d, after: %s)", pageSize, cursor)
 		err = client.Query(context.Background(), &itemsInfo, map[string]interface{}{
 			"projectNumber": graphql.Int(projectNumber),
-			"user":         graphql.String(os.Getenv("REPOSITORY_OWNER")),
-			"first":        graphql.Int(pageSize),
-			"after":        graphql.String(cursor),
+			"user":          graphql.String(os.Getenv("REPOSITORY_OWNER")),
+			"first":         graphql.Int(pageSize),
+			"after":         graphql.String(cursor),
 		})
 		if err != nil {
 			log.Printf("Failed to fetch issues: %v", err)
