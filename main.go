@@ -13,9 +13,9 @@ import (
 
 func main() {
 	err := godotenv.Load()
-	if err != nil {
-		log.Fatalf("error loading .env file")
-	}
+	// if err != nil {
+	// 	log.Fatalf("error loading .env file")
+	// }
 
 	client, err := github.GetClient(os.Getenv("GITHUB_TOKEN_CLASSIC"))
 	if err != nil {
