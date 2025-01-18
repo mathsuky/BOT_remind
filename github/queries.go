@@ -36,6 +36,11 @@ func UpdateDeadline(client *graphql.Client, date string, targetIssueId int) (str
 	}
 	nowDate := time.Now().In(jst).Format("2006-01-02")
 
+	// dateが今日以降かを確認
+	if date < nowDate {
+		return "過去の日付は設定できません。", nil
+	}
+
 	input1 := query.UpdateProjectV2ItemFieldValueInput{
 		ItemID:    graphql.ID(goalItemId),
 		ProjectID: graphql.ID(projectId),
