@@ -37,6 +37,7 @@ func UpdateDeadline(client *graphql.Client, date string, targetIssueId int) (str
 	if err != nil {
 		return "キャッシュの読み込みまたは作成に失敗しました。", err
 	}
+	log.Printf("issuesDict: %v", issuesDict)
 	goalItemId, goalFieldId, err := GetItemAndFieldId(client, issuesDict, fieldsDict, targetIssueId, "目標")
 	if err != nil {
 		return "issueが紐づけられていないか，「目標」フィールドが存在しませんでした。", err
@@ -126,14 +127,14 @@ func UpdateAssigner(client *graphql.Client, targetIssueNum int, traqID string, g
 	}
 	issueID := issueQuery.Repository.Issue.Id
 
-	var assigneeQuery query.GetUserIdQuery
+	var assigneeQuery query.GetOrganizationIdQuery
 	err = client.Query(context.Background(), &assigneeQuery, map[string]interface{}{
 		"login": graphql.String(githubLogin),
 	})
 	if err != nil {
 		return "ユーザー ID の取得に失敗しました。", err
 	}
-	assigneeID := assigneeQuery.User.Id
+	assigneeID := assigneeQuery.Organization.Id
 
 	assignInput := query.AddAssigneesToAssignableInput{
 		AssignableId: graphql.ID(issueID),
@@ -184,14 +185,14 @@ func Remind(client *graphql.Client) ([]query.IssueDetail, error) {
 	var tmpQuery query.GetIssueFieldsQuery
 	err = client.Query(context.Background(), &tmpQuery, map[string]interface{}{
 		"projectNumber": graphql.Int(projectNumber),
-		"user":          graphql.String(os.Getenv("REPOSITORY_OWNER")),
+		"organization":  graphql.String(os.Getenv("ORGANIZATION_NAME")),
 	})
 	if err != nil {
 		return nil, fmt.Errorf("failed to get issue fields: %v", err)
 	}
-	log.Println(tmpQuery.User.ProjectV2.Items.Nodes)
+	log.Println(tmpQuery.Organization.ProjectV2.Items.Nodes)
 	var issues []query.IssueDetail
-	for _, item := range tmpQuery.User.ProjectV2.Items.Nodes {
+	for _, item := range tmpQuery.Organization.ProjectV2.Items.Nodes {
 		// TODO: エラーハンドリングをももうちょいよくして
 		if item.Deadline.ProjectV2ItemFieldDateValue.Date == "" {
 			continue

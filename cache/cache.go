@@ -108,24 +108,24 @@ func MakeCache(client *graphql.Client) (string, map[int]string, map[string]graph
 	if err != nil {
 		return "", nil, nil, nil, fmt.Errorf("failed to convert PROJECTV2_NUMBER to int: %v", err)
 	}
-	var baseInfo query.GetUserProjectBaseInfoQuery
+	var baseInfo query.GetOrganizationProjectBaseInfoQuery
 	// キャッシュがない場合はクエリを実行してキャッシュを保存
 	err = client.Query(context.Background(), &baseInfo, map[string]interface{}{
 		"projectNumber": graphql.Int(projectNumber),
-		"user":          graphql.String(os.Getenv("REPOSITORY_OWNER")),
+		"organization":  graphql.String(os.Getenv("ORGANIZATION_NAME")),
 	})
 	if err != nil {
 		return "", nil, nil, nil, err
 	}
 
-	projectId := baseInfo.User.ProjectV2.Id
+	projectId := baseInfo.Organization.ProjectV2.Id
 
 	fieldsDict := make(map[string]graphql.ID)
 	statusOptionsDict := make(map[string]graphql.ID)
-	for _, field := range baseInfo.User.ProjectV2.Fields.Nodes {
+	for _, field := range baseInfo.Organization.ProjectV2.Fields.Nodes {
 		fieldsDict[field.ProjectV2Field.Name] = graphql.ID(field.ProjectV2Field.Id)
 	}
-	for _, field := range baseInfo.User.ProjectV2.Fields.Nodes {
+	for _, field := range baseInfo.Organization.ProjectV2.Fields.Nodes {
 		log.Println(field.ProjectV2SingleSelectField.Options, field.ProjectV2Field.Name)
 		if field.ProjectV2Field.Name == "Status" {
 			for _, option := range field.ProjectV2SingleSelectField.Options {
@@ -135,7 +135,7 @@ func MakeCache(client *graphql.Client) (string, map[int]string, map[string]graph
 	}
 
 	// projectsに紐づけられたissueの情報を取得
-	var itemsInfo query.GetUserProjectItemsQuery
+	var itemsInfo query.GetOrganizationProjectItemsQuery
 	issuesDict := make(map[int]string)
 	pageSize := 50
 	var cursor string
@@ -145,7 +145,7 @@ func MakeCache(client *graphql.Client) (string, map[int]string, map[string]graph
 		log.Printf("Fetching issues page (size: %d, after: %s)", pageSize, cursor)
 		err = client.Query(context.Background(), &itemsInfo, map[string]interface{}{
 			"projectNumber": graphql.Int(projectNumber),
-			"user":          graphql.String(os.Getenv("REPOSITORY_OWNER")),
+			"organization":  graphql.String(os.Getenv("ORGANIZATION_NAME")),
 			"first":         graphql.Int(pageSize),
 			"after":         graphql.String(cursor),
 		})
@@ -154,18 +154,18 @@ func MakeCache(client *graphql.Client) (string, map[int]string, map[string]graph
 			return "", nil, nil, nil, err
 		}
 
-		for _, item := range itemsInfo.User.ProjectV2.Items.Nodes {
+		for _, item := range itemsInfo.Organization.ProjectV2.Items.Nodes {
 			issuesDict[item.Content.Issue.Number] = item.Id
 			totalItems++
 		}
 
-		if !itemsInfo.User.ProjectV2.Items.PageInfo.HasNextPage {
+		if !itemsInfo.Organization.ProjectV2.Items.PageInfo.HasNextPage {
 			break
 		}
-		cursor = itemsInfo.User.ProjectV2.Items.PageInfo.EndCursor
+		cursor = itemsInfo.Organization.ProjectV2.Items.PageInfo.EndCursor
 		log.Printf("Fetched %d items so far", totalItems)
 	}
-
+	log.Printf("issuesDict: %v", issuesDict)
 	log.Printf("Completed fetching all issues (total: %d)", totalItems)
 
 	return projectId, issuesDict, fieldsDict, statusOptionsDict, nil

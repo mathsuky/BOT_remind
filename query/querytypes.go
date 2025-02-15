@@ -59,14 +59,15 @@ type GetIssueIdFromRepositoryQuery struct {
 	} `graphql:"repository(owner: $owner, name: $repo)"`
 }
 
-type GetUserIdQuery struct {
-	User struct {
+// ユーザから組織に変更したため、型名も GetOrganizationIdQuery に変更
+type GetOrganizationIdQuery struct {
+	Organization struct {
 		Id string
-	} `graphql:"user(login: $login)"`
+	} `graphql:"organization(login: $organization)"`
 }
 
-type GetUserProjectBaseInfoQuery struct {
-	User struct {
+type GetOrganizationProjectBaseInfoQuery struct {
+	Organization struct {
 		ProjectV2 struct {
 			Id     string
 			Fields struct {
@@ -87,15 +88,15 @@ type GetUserProjectBaseInfoQuery struct {
 				}
 			} `graphql:"fields(first: 100)"`
 		} `graphql:"projectV2(number: $projectNumber)"`
-	} `graphql:"user(login: $user)"`
+	} `graphql:"organization(login: $organization)"`
 }
 
-type GetUserProjectItemsQuery struct {
-	User struct {
+type GetOrganizationProjectItemsQuery struct {
+	Organization struct {
 		ProjectV2 struct {
 			Items struct {
 				Nodes []struct {
-					Id      string
+					Id string
 					Content struct {
 						Issue struct {
 							Number int
@@ -108,11 +109,11 @@ type GetUserProjectItemsQuery struct {
 				}
 			} `graphql:"items(first: $first, after: $after)"`
 		} `graphql:"projectV2(number: $projectNumber)"`
-	} `graphql:"user(login: $user)"`
+	} `graphql:"organization(login: $organization)"`
 }
 
 type GetIssueFieldsQuery struct {
-	User struct {
+	Organization struct {
 		ProjectV2 struct {
 			Items struct {
 				Nodes []struct {
@@ -139,7 +140,7 @@ type GetIssueFieldsQuery struct {
 				}
 			} `graphql:"items(first: 100)"`
 		} `graphql:"projectV2(number: $projectNumber)"`
-	} `graphql:"user(login: $user)"`
+	} `graphql:"organization(login: $organization)"`
 }
 
 type ProjectV2SingleSelectFieldOption struct {
