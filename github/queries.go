@@ -14,8 +14,25 @@ import (
 	"github.com/mathsuky/BOT_remind/query"
 )
 
+func GetItemAndFieldId(client *graphql.Client, issuesDict map[int]string, fieldsDict map[string]graphql.ID, targetIssueNum int, fieldKey string) (string, graphql.ID, error) {
+	itemId, ok := issuesDict[targetIssueNum]
+	fieldId, ok2 := fieldsDict[fieldKey]
+	if !ok || !ok2 {
+		// キャッシュを再作成
+		_, issuesDict, fieldsDict, _, err := cache.MakeCache(client)
+		if err != nil {
+			return "", "", fmt.Errorf("failed to make cache: %v", err)
+		}
+		itemId, ok = issuesDict[targetIssueNum]
+		fieldId, ok2 = fieldsDict[fieldKey]
+		if !ok || !ok2 {
+			return "", "", fmt.Errorf("issue or field not found")
+		}
+	}
+	return itemId, fieldId, nil
+}
+
 func UpdateDeadline(client *graphql.Client, date string, targetIssueId int) (string, error) {
-	// APIを叩くための基本情報を取得
 	projectId, issuesDict, fieldsDict, _, err := cache.LoadOrMakeCache(client)
 	if err != nil {
 		return "キャッシュの読み込みまたは作成に失敗しました。", err
@@ -29,14 +46,12 @@ func UpdateDeadline(client *graphql.Client, date string, targetIssueId int) (str
 		return "issueが紐づけられていないか，「目標開始日」フィールドが存在しませんでした。", err
 	}
 
-	// APIを叩くための変数を設定
 	jst, err := time.LoadLocation("Asia/Tokyo")
 	if err != nil {
 		return "タイムゾーンの取得に失敗しました。", err
 	}
 	nowDate := time.Now().In(jst).Format("2006-01-02")
 
-	// dateが今日以降かを確認
 	if date < nowDate {
 		return "過去の日付は設定できません。", nil
 	}
@@ -46,7 +61,7 @@ func UpdateDeadline(client *graphql.Client, date string, targetIssueId int) (str
 		ProjectID: graphql.ID(projectId),
 		FieldID:   graphql.ID(goalFieldId),
 		Value: query.FieldValue{
-			"date": date, // 目標フィールドがDate型の場合
+			"date": date,
 		},
 	}
 	input2 := query.UpdateProjectV2ItemFieldValueInput{
@@ -54,7 +69,7 @@ func UpdateDeadline(client *graphql.Client, date string, targetIssueId int) (str
 		ProjectID: graphql.ID(projectId),
 		FieldID:   graphql.ID(startFieldId),
 		Value: query.FieldValue{
-			"date": nowDate, // 目標開始日フィールドがDate型の場合
+			"date": nowDate,
 		},
 	}
 
@@ -63,7 +78,6 @@ func UpdateDeadline(client *graphql.Client, date string, targetIssueId int) (str
 		"input2": input2,
 	}
 
-	// ミューテーションの実行
 	var mutation query.UpdateRelatedIssueDeadlineMutation
 	err = client.Mutate(context.Background(), &mutation, vars)
 	if err != nil {
@@ -73,7 +87,6 @@ func UpdateDeadline(client *graphql.Client, date string, targetIssueId int) (str
 }
 
 func UpdateAssigner(client *graphql.Client, targetIssueNum int, traqID string, githubLogin string) (string, error) {
-	// APIを叩くための基本情報を取得
 	projectID, issuesDict, fieldsDict, statusOptionsDict, err := cache.LoadOrMakeCache(client)
 	if err != nil {
 		return "キャッシュの読み込みまたは作成に失敗しました。", err
@@ -84,7 +97,6 @@ func UpdateAssigner(client *graphql.Client, targetIssueNum int, traqID string, g
 	}
 	log.Println(itemID)
 
-	// APIを叩くための変数を設定
 	updateInput := query.UpdateProjectV2ItemFieldValueInput{
 		ItemID:    graphql.ID(itemID),
 		ProjectID: graphql.ID(projectID),
@@ -97,14 +109,12 @@ func UpdateAssigner(client *graphql.Client, targetIssueNum int, traqID string, g
 		"input": updateInput,
 	}
 
-	// traQIDフィールドを更新するmutationを実行
 	var updateMutation query.UpdateProjectV2ItemFieldValue
 	err = client.Mutate(context.Background(), &updateMutation, updateVars)
 	if err != nil {
 		return "traQIDの更新に失敗しました", err
 	}
 
-	// issue ID の取得
 	var issueQuery query.GetIssueIdFromRepositoryQuery
 	err = client.Query(context.Background(), &issueQuery, map[string]interface{}{
 		"owner":       graphql.String(os.Getenv("REPOSITORY_OWNER")),
@@ -116,7 +126,6 @@ func UpdateAssigner(client *graphql.Client, targetIssueNum int, traqID string, g
 	}
 	issueID := issueQuery.Repository.Issue.Id
 
-	// ユーザー ID の取得
 	var assigneeQuery query.GetUserIdQuery
 	err = client.Query(context.Background(), &assigneeQuery, map[string]interface{}{
 		"login": graphql.String(githubLogin),
@@ -126,7 +135,6 @@ func UpdateAssigner(client *graphql.Client, targetIssueNum int, traqID string, g
 	}
 	assigneeID := assigneeQuery.User.Id
 
-	// APIを叩くための変数を設定
 	assignInput := query.AddAssigneesToAssignableInput{
 		AssignableId: graphql.ID(issueID),
 		AssigneeIds:  []graphql.ID{graphql.ID(assigneeID)},
@@ -135,14 +143,12 @@ func UpdateAssigner(client *graphql.Client, targetIssueNum int, traqID string, g
 		"input": assignInput,
 	}
 
-	// Assigneeを追加するmutationを実行
 	var assignMutation query.AddAssigneeToAssignableMutation
 	err = client.Mutate(context.Background(), &assignMutation, assignVars)
 	if err != nil {
 		return "担当者の追加に失敗しました。", err
 	}
 	log.Println(assignMutation.AddAssigneesToAssignable.Assignable.Issue.Title)
-	log.Println("sdf")
 
 	var statusQuery query.UpdateProjectV2ItemFieldValue
 	_, statusFieldID, err := GetItemAndFieldId(client, issuesDict, fieldsDict, targetIssueNum, "Status")
@@ -207,22 +213,4 @@ func Remind(client *graphql.Client) ([]query.IssueDetail, error) {
 	}
 	log.Println(issues)
 	return issues, nil
-}
-
-func GetItemAndFieldId(client *graphql.Client, issuesDict map[int]string, fieldsDict map[string]graphql.ID, targetIssueNum int, fieldKey string) (string, graphql.ID, error) {
-	itemId, ok := issuesDict[targetIssueNum]
-	fieldId, ok2 := fieldsDict[fieldKey]
-	if !ok || !ok2 {
-		// キャッシュを再作成
-		_, issuesDict, fieldsDict, _, err := cache.MakeCache(client)
-		if err != nil {
-			return "", "", fmt.Errorf("failed to make cache: %v", err)
-		}
-		itemId, ok = issuesDict[targetIssueNum]
-		fieldId, ok2 = fieldsDict[fieldKey]
-		if !ok || !ok2 {
-			return "", "", fmt.Errorf("issue or field not found")
-		}
-	}
-	return itemId, fieldId, nil
 }
