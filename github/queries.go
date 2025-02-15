@@ -127,14 +127,14 @@ func UpdateAssigner(client *graphql.Client, targetIssueNum int, traqID string, g
 	}
 	issueID := issueQuery.Repository.Issue.Id
 
-	var assigneeQuery query.GetOrganizationIdQuery
+	var assigneeQuery query.GetUserIdQuery
 	err = client.Query(context.Background(), &assigneeQuery, map[string]interface{}{
 		"login": graphql.String(githubLogin),
 	})
 	if err != nil {
 		return "ユーザー ID の取得に失敗しました。", err
 	}
-	assigneeID := assigneeQuery.Organization.Id
+	assigneeID := assigneeQuery.User.Id
 
 	assignInput := query.AddAssigneesToAssignableInput{
 		AssignableId: graphql.ID(issueID),

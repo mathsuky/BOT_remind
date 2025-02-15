@@ -59,11 +59,10 @@ type GetIssueIdFromRepositoryQuery struct {
 	} `graphql:"repository(owner: $owner, name: $repo)"`
 }
 
-// ユーザから組織に変更したため、型名も GetOrganizationIdQuery に変更
-type GetOrganizationIdQuery struct {
-	Organization struct {
+type GetUserIdQuery struct {
+	User struct {
 		Id string
-	} `graphql:"organization(login: $organization)"`
+	} `graphql:"user(login: $login)"`
 }
 
 type GetOrganizationProjectBaseInfoQuery struct {
@@ -96,7 +95,7 @@ type GetOrganizationProjectItemsQuery struct {
 		ProjectV2 struct {
 			Items struct {
 				Nodes []struct {
-					Id string
+					Id      string
 					Content struct {
 						Issue struct {
 							Number int
