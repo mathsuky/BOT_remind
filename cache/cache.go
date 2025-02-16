@@ -2,9 +2,11 @@ package cache
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"log"
 	"os"
+	"path/filepath"
 	"strconv"
 	"time"
 
@@ -12,10 +14,28 @@ import (
 	"github.com/mathsuky/BOT_remind/query"
 )
 
-// グローバルなインメモリキャッシュ
-var memCache *CacheData
+var cacheFilePath string
 
-// キャッシュデータ構造体
+func init() {
+	// キャッシュディレクトリの設定
+	// 1. CACHE_DIR環境変数
+	// 2. /tmp/bot-remind（デフォルト）
+	cacheDir := os.Getenv("CACHE_DIR")
+	if cacheDir == "" {
+		cacheDir = filepath.Join(os.TempDir(), "bot-remind")
+	}
+
+	// キャッシュディレクトリの作成（0755パーミッション）
+	if err := os.MkdirAll(cacheDir, 0755); err != nil {
+		log.Printf("Warning: Failed to create cache directory: %v", err)
+		// フォールバック: 一時ディレクトリ直下
+		cacheDir = os.TempDir()
+	}
+
+	cacheFilePath = filepath.Join(cacheDir, "github_project.json")
+	log.Printf("Using cache file: %s", cacheFilePath)
+}
+
 type CacheData struct {
 	ID                string
 	IssuesDict        map[int]string
@@ -27,35 +47,69 @@ type CacheData struct {
 // キャッシュの有効期間（24時間）
 const cacheTTL = 24 * time.Hour
 
-// LoadCache はインメモリキャッシュからデータを読み込み、有効期限をチェックします。
 func LoadCache() (CacheData, error) {
-	if memCache == nil {
-		log.Printf("キャッシュが存在しません")
-		return CacheData{}, fmt.Errorf("キャッシュが存在しません")
+	data, err := os.ReadFile(cacheFilePath)
+	if err != nil {
+		log.Printf("Failed to read cache file: %v", err)
+		return CacheData{}, err
 	}
-	if time.Since(memCache.CreatedAt) > cacheTTL {
-		log.Printf("キャッシュが期限切れです: 作成時刻 %v", memCache.CreatedAt)
-		memCache = nil
-		return CacheData{}, fmt.Errorf("キャッシュが期限切れです")
+
+	var cache CacheData
+	if err = json.Unmarshal(data, &cache); err != nil {
+		log.Printf("Failed to unmarshal cache data: %v", err)
+		return CacheData{}, err
 	}
-	log.Printf("キャッシュをメモリから読み込みました: 作成時刻 %v", memCache.CreatedAt)
-	return *memCache, nil
+
+	// キャッシュの有効期限をチェック
+	if time.Since(cache.CreatedAt) > cacheTTL {
+		log.Printf("Cache expired: created at %v", cache.CreatedAt)
+		return CacheData{}, fmt.Errorf("cache expired")
+	}
+
+	log.Printf("Cache loaded successfully: created at %v", cache.CreatedAt)
+
+	return cache, nil
 }
 
-// SaveCache はキャッシュデータをインメモリに保存します。
-func SaveCache(data CacheData) {
-	memCache = &data
-	log.Printf("キャッシュをメモリに保存しました: 作成時刻 %v", data.CreatedAt)
+func SaveCache(id string, dic1 map[int]string, dic2 map[string]graphql.ID, dic3 map[string]graphql.ID) error {
+	cacheData := CacheData{
+		ID:                id,
+		IssuesDict:        dic1,
+		FieldsDict:        dic2,
+		StatusOptionsDict: dic3,
+		CreatedAt:         time.Now(),
+	}
+
+	// 既存のキャッシュファイルが存在する場合は削除
+	if err := os.Remove(cacheFilePath); err != nil && !os.IsNotExist(err) {
+		log.Printf("Failed to remove old cache file: %v", err)
+		return fmt.Errorf("failed to remove old cache file: %v", err)
+	}
+
+	data, err := json.Marshal(cacheData)
+	if err != nil {
+		return err
+	}
+
+	// 0644パーミッションでファイルを作成
+	err = os.WriteFile(cacheFilePath, data, 0644)
+	if err != nil {
+		log.Printf("Failed to write cache file: %v", err)
+		return err
+	}
+
+	log.Printf("Cache saved successfully at %v", time.Now())
+
+	return nil
 }
 
-// MakeCache はGraphQLクライアントを使用してデータを取得し、キャッシュデータを生成します。
 func MakeCache(client *graphql.Client) (string, map[int]string, map[string]graphql.ID, map[string]graphql.ID, error) {
 	projectNumber, err := strconv.Atoi(os.Getenv("PROJECTV2_NUMBER"))
 	if err != nil {
-		return "", nil, nil, nil, fmt.Errorf("PROJECTV2_NUMBERをintに変換できません: %v", err)
+		return "", nil, nil, nil, fmt.Errorf("failed to convert PROJECTV2_NUMBER to int: %v", err)
 	}
 	var baseInfo query.GetOrganizationProjectBaseInfoQuery
-	// キャッシュがない場合、GraphQLクエリを実行してデータを取得
+	// キャッシュがない場合はクエリを実行してキャッシュを保存
 	err = client.Query(context.Background(), &baseInfo, map[string]interface{}{
 		"projectNumber": graphql.Int(projectNumber),
 		"organization":  graphql.String(os.Getenv("ORGANIZATION_NAME")),
@@ -80,7 +134,7 @@ func MakeCache(client *graphql.Client) (string, map[int]string, map[string]graph
 		}
 	}
 
-	// プロジェクトに紐づけられたIssue情報の取得
+	// projectsに紐づけられたissueの情報を取得
 	var itemsInfo query.GetOrganizationProjectItemsQuery
 	issuesDict := make(map[int]string)
 	pageSize := 50
@@ -96,7 +150,7 @@ func MakeCache(client *graphql.Client) (string, map[int]string, map[string]graph
 			"after":         graphql.String(cursor),
 		})
 		if err != nil {
-			log.Printf("Issuesの取得に失敗しました: %v", err)
+			log.Printf("Failed to fetch issues: %v", err)
 			return "", nil, nil, nil, err
 		}
 
@@ -109,15 +163,14 @@ func MakeCache(client *graphql.Client) (string, map[int]string, map[string]graph
 			break
 		}
 		cursor = itemsInfo.Organization.ProjectV2.Items.PageInfo.EndCursor
-		log.Printf("これまでに取得したIssue数: %d", totalItems)
+		log.Printf("Fetched %d items so far", totalItems)
 	}
 	log.Printf("issuesDict: %v", issuesDict)
-	log.Printf("全Issueの取得が完了しました (合計: %d)", totalItems)
+	log.Printf("Completed fetching all issues (total: %d)", totalItems)
 
 	return projectId, issuesDict, fieldsDict, statusOptionsDict, nil
 }
 
-// LoadOrMakeCache はキャッシュを読み込み、存在しないか期限切れの場合は新たにキャッシュを生成します。
 func LoadOrMakeCache(client *graphql.Client) (string, map[int]string, map[string]graphql.ID, map[string]graphql.ID, error) {
 	baseInfo, err := LoadCache()
 	if err == nil {
@@ -126,15 +179,11 @@ func LoadOrMakeCache(client *graphql.Client) (string, map[int]string, map[string
 
 	projectId, issuesDict, fieldsDict, statusOptionsDict, err := MakeCache(client)
 	if err != nil {
-		return "", nil, nil, nil, fmt.Errorf("キャッシュの生成に失敗しました: %v", err)
+		return "", nil, nil, nil, fmt.Errorf("failed to make cache: %v", err)
 	}
-	newCache := CacheData{
-		ID:                projectId,
-		IssuesDict:        issuesDict,
-		FieldsDict:        fieldsDict,
-		StatusOptionsDict: statusOptionsDict,
-		CreatedAt:         time.Now(),
+	err = SaveCache(projectId, issuesDict, fieldsDict, statusOptionsDict)
+	if err != nil {
+		return "", nil, nil, nil, fmt.Errorf("failed to save cache: %v", err)
 	}
-	SaveCache(newCache)
 	return projectId, issuesDict, fieldsDict, statusOptionsDict, nil
 }
