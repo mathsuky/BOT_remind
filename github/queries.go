@@ -32,7 +32,7 @@ func GetItemAndFieldId(client *graphql.Client, issuesDict map[int]string, fields
 	return itemId, fieldId, nil
 }
 
-func UpdateDeadline(client *graphql.Client, date string, targetIssueId int) (string, error) {
+func UpdateDeadline(client *graphql.Client, date string, traqID string, targetIssueId int) (string, error) {
 	projectId, issuesDict, fieldsDict, _, err := cache.LoadOrMakeCache(client)
 	if err != nil {
 		return "キャッシュの読み込みまたは作成に失敗しました。", err
@@ -45,6 +45,11 @@ func UpdateDeadline(client *graphql.Client, date string, targetIssueId int) (str
 	startItemId, startFieldId, err := GetItemAndFieldId(client, issuesDict, fieldsDict, targetIssueId, "目標開始日")
 	if err != nil {
 		return "issueが紐づけられていないか，「目標開始日」フィールドが存在しませんでした。", err
+	}
+
+	itemID, traqIDFieldID, err := GetItemAndFieldId(client, issuesDict, fieldsDict, targetIssueId, "traQID")
+	if err != nil {
+		return "issueが紐づけられていないか，「traQID」フィールドが存在しませんでした。", err
 	}
 
 	jst, err := time.LoadLocation("Asia/Tokyo")
@@ -74,6 +79,14 @@ func UpdateDeadline(client *graphql.Client, date string, targetIssueId int) (str
 		},
 	}
 
+	traqIDUpdateInput := query.UpdateProjectV2ItemFieldValueInput{
+		ItemID:    graphql.ID(itemID),
+		ProjectID: graphql.ID(projectId),
+		FieldID:   graphql.ID(traqIDFieldID),
+		Value: query.FieldValue{
+			"text": traqID, // 環境変数ではなく引数から受け取る
+		},
+	}
 	vars := map[string]interface{}{
 		"input1": input1,
 		"input2": input2,
@@ -84,6 +97,17 @@ func UpdateDeadline(client *graphql.Client, date string, targetIssueId int) (str
 	if err != nil {
 		return "ミューテーションの実行に失敗しました。", err
 	}
+
+	updateVars := map[string]interface{}{
+		"input": traqIDUpdateInput,
+	}
+
+	var updateMutation query.UpdateProjectV2ItemFieldValue
+	err = client.Mutate(context.Background(), &updateMutation, updateVars)
+	if err != nil {
+		return "traQIDの更新に失敗しました", err
+	}
+
 	return "期日が正常に設定されました。", nil
 }
 

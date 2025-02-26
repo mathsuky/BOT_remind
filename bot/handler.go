@@ -42,7 +42,7 @@ func HandleMessage(client *graphql.Client, p *payload.MessageCreated) (string, e
 		if _, err := fmt.Sscanf(parts[3], "%d", &issueID); err != nil {
 			return "有効な issue ID を入力してください。", nil
 		}
-		return github.UpdateDeadline(client, date, issueID)
+		return github.UpdateDeadline(client, date, p.Message.User.Name, issueID)
 	case "/assign": // TODO:匹数に不適切なgithubユーザー名が入力された場合の処理
 		if len(parts) < 4 {
 			return "十分な引数を提供してください。", nil
