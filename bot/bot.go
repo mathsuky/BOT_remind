@@ -34,7 +34,7 @@ func Start(client *graphql.Client, accessToken string) error {
 	})
 
 	// 毎日特定の時間にメッセージを送信するスケジューリング
-	go ScheduleDailyMessage(client, bot, os.Getenv("TARGET_CHANNEL_ID"), 22, 49)
+	go ScheduleDailyMessage(client, bot, os.Getenv("TARGET_CHANNEL_ID"), 12, 00)
 
 	// Bot の起動
 	return bot.Start()
