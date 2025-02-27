@@ -33,7 +33,7 @@ func GetItemAndFieldId(client *graphql.Client, issuesDict map[int]string, fields
 }
 
 func UpdateDeadline(client *graphql.Client, date string, traqID string, targetIssueId int) (string, error) {
-	projectId, issuesDict, fieldsDict, _, err := cache.LoadOrMakeCache(client)
+	projectId, issuesDict, fieldsDict, statusOptionsDict, err := cache.LoadOrMakeCache(client)
 	if err != nil {
 		return "キャッシュの読み込みまたは作成に失敗しました。", err
 	}
@@ -107,6 +107,29 @@ func UpdateDeadline(client *graphql.Client, date string, traqID string, targetIs
 	if err != nil {
 		return "traQIDの更新に失敗しました", err
 	}
+
+	var statusQuery query.UpdateProjectV2ItemFieldValue
+	_, statusFieldID, err := GetItemAndFieldId(client, issuesDict, fieldsDict, targetIssueId, "Status")
+	progressID := statusOptionsDict["In Progress"]
+	if err != nil {
+		return "issueが紐づけられていないか，「ステータス」フィールドが存在しませんでした。", err
+	}
+	statusUpdateInput := query.UpdateProjectV2ItemFieldValueInput{
+		ItemID:    graphql.ID(itemID),
+		ProjectID: graphql.ID(projectId),
+		FieldID:   graphql.ID(statusFieldID),
+		Value: query.FieldValue{
+			"singleSelectOptionId": progressID,
+		},
+	}
+	statusUpdateVars := map[string]interface{}{
+		"input": statusUpdateInput,
+	}
+	err = client.Mutate(context.Background(), &statusQuery, statusUpdateVars)
+	if err != nil {
+		return "ステータスの更新に失敗しました。", err
+	}
+
 
 	return "期日が正常に設定されました。", nil
 }

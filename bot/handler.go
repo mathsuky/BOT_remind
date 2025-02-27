@@ -87,6 +87,7 @@ func ScheduleDailyMessage(client *graphql.Client, bot *traqwsbot.Bot, channelID 
 		}
 
 		for _, issue := range issues {
+			log.Printf("Sending scheduled message for issue %d\n", issue.IssueNum)
 			message := fmt.Sprintf("@%s Issue%dの締切は%sです!", issue.Assignee, issue.IssueNum, issue.Deadline.Format("2006-01-02"))
 			b := true
 			_, _, err := bot.API().MessageApi.PostMessage(context.Background(), channelID).
